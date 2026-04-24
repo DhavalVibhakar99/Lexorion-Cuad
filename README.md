@@ -126,8 +126,8 @@ streamlit run src/dashboard/app.py
 
 ## Team
 
-- **Person A** (Engineering Lead): Data pipeline, model training, dashboard, deployment
-- **Person B** (Analysis Lead): EDA, evaluation framework, prompt engineering, blog post
+- **Dhaval Vibhakar** (Engineering Lead): Data pipeline, model training, dashboard, deployment
+- **Sahil Shinde** (Analysis Lead): EDA, evaluation framework, prompt engineering, blog post
 
 ## License
 
