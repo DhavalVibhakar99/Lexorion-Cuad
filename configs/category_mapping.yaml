@@ -1,0 +1,95 @@
+# Mapping of CUAD's 41 clause categories → 8 risk categories
+# Each risk category contains the CUAD label names exactly as they appear in the dataset
+
+risk_categories:
+  liability_risk:
+    display_name: "Liability Risk"
+    description: "Clauses that affect financial exposure and liability caps"
+    severity_weight: 0.95  # How important is this category (0-1)
+    cuad_labels:
+      - "Limitation Of Liability"
+      - "Cap On Liability"
+      - "Uncapped Liability"
+      - "Liquidated Damages"
+
+  ip_risk:
+    display_name: "IP Risk"
+    description: "Clauses affecting intellectual property ownership and usage rights"
+    severity_weight: 0.90
+    cuad_labels:
+      - "Ip Ownership Assignment"
+      - "License Grant"
+      - "Non-Compete"
+      - "Covenant Not To Sue"
+      - "Third Party Beneficiary"
+
+  termination_risk:
+    display_name: "Termination Risk"
+    description: "Clauses governing how and when the contract can end"
+    severity_weight: 0.85
+    cuad_labels:
+      - "Termination For Convenience"
+      - "Effect Of Termination"
+      - "Post-Termination Services"
+
+  indemnification:
+    display_name: "Indemnification"
+    description: "Clauses determining who bears loss in adverse events"
+    severity_weight: 0.90
+    cuad_labels:
+      - "Indemnification"
+      - "Insurance"
+
+  exclusivity:
+    display_name: "Exclusivity & Restrictions"
+    description: "Clauses limiting business activities or partnerships"
+    severity_weight: 0.80
+    cuad_labels:
+      - "Exclusivity"
+      - "No-Solicit Of Employees"
+      - "Non-Compete"
+      - "No-Solicit Of Customers"
+      - "Competitive Restriction Exception"
+
+  change_of_control:
+    display_name: "Change of Control"
+    description: "Clauses triggered by ownership or management changes"
+    severity_weight: 0.85
+    cuad_labels:
+      - "Change Of Control"
+      - "Anti-Assignment"
+      - "Consent To Assignment"
+
+  revenue_risk:
+    display_name: "Revenue & Financial Risk"
+    description: "Clauses creating financial obligations or revenue sharing"
+    severity_weight: 0.80
+    cuad_labels:
+      - "Minimum Commitment"
+      - "Revenue/Profit Sharing"
+      - "Price Restrictions"
+      - "Most Favored Nation"
+      - "Volume Restriction"
+      - "Audit Rights"
+
+  renewal_expiration:
+    display_name: "Renewal & Expiration"
+    description: "Clauses governing contract lifecycle and auto-renewal"
+    severity_weight: 0.70
+    cuad_labels:
+      - "Expiration Date"
+      - "Renewal Term"
+      - "Notice Period To Terminate Renewal"
+
+# Labels from CUAD that we intentionally skip (too basic or too sparse)
+excluded_labels:
+  - "Document Name"
+  - "Parties"
+  - "Agreement Date"
+  - "Effective Date"
+  - "Governing Law"
+  - "Jurisdiction"
+  - "Warranty Duration"
+  - "Rofr/Rofo/Rofn"
+  - "Joint Ip Ownership"
+  - "Irrevocable Or Perpetual License"

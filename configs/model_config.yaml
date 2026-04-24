@@ -1,0 +1,63 @@
+# Model Configuration
+
+# === DeBERTa Clause Detector ===
+clause_detector:
+  model_name: "microsoft/deberta-v3-base"
+  max_seq_length: 512
+  doc_stride: 128
+  batch_size: 8
+  learning_rate: 2.0e-5
+  num_epochs: 3
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  fp16: true
+  gradient_accumulation_steps: 2
+  
+  # For the binary "does this paragraph contain a clause?" task
+  binary_threshold: 0.5
+  
+  # Save best model by this metric
+  eval_metric: "f1"
+
+# === LLM Classifier ===
+llm_classifier:
+  # Use claude-sonnet-4-20250514 for cost efficiency, switch to opus for quality comparison
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 1024
+  temperature: 0.0  # Deterministic for evaluation consistency
+  
+  # Cost controls
+  max_paragraphs_per_contract: 50  # Skip very long contracts
+  cache_responses: true  # Don't re-call API for same input
+  
+# === Hybrid Pipeline ===
+hybrid_pipeline:
+  # Route "easy" categories to DeBERTa, "hard" ones to LLM
+  # Categories where DeBERTa F1 > threshold go to local model
+  local_model_threshold: 0.70
+  
+  # Confidence threshold - below this, escalate to LLM
+  confidence_escalation_threshold: 0.40
+
+# === Evaluation ===
+evaluation:
+  test_split_ratio: 0.2
+  random_seed: 42
+  
+  # Metrics to compute per category
+  metrics:
+    - "precision"
+    - "recall"
+    - "f1"
+    - "jaccard"
+    - "aupr"
+  
+  # For the comparison table
+  track_latency: true
+  track_cost: true
+
+# === Data Processing ===
+data:
+  cuad_dataset: "theatticusproject/cuad-qa"
+  min_paragraph_length: 50  # Skip very short paragraphs (headers, etc.)
+  max_paragraph_length: 2000  # Truncate extremely long ones
