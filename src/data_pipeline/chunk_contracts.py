@@ -21,7 +21,7 @@ MIN_PARAGRAPH_CHARS = 100
 MAX_PARAGRAPH_CHARS = 3000
 
 
-def split_into_paragraphs(text: str) -> List[str]:
+def split_into_paragraphs(text: str, min_length: int = MIN_PARAGRAPH_CHARS) -> List[str]:
     """Split contract text into paragraphs using multiple delimiter strategies."""
     paragraphs = []
 
@@ -36,12 +36,12 @@ def split_into_paragraphs(text: str) -> List[str]:
         for line in lines:
             # Start new paragraph on section headers or numbered sections
             if re.match(r"^\s*(SECTION|ARTICLE|EXHIBIT|\d+\.\s+[A-Z])", line.strip()):
-                if current.strip() and len(current.strip()) >= MIN_PARAGRAPH_CHARS:
+                if current.strip() and len(current.strip()) >= min_length:
                     paragraphs.append(current.strip())
                 current = line
             else:
                 current += "\n" + line
-        if current.strip() and len(current.strip()) >= MIN_PARAGRAPH_CHARS:
+        if current.strip() and len(current.strip()) >= min_length:
             paragraphs.append(current.strip())
 
         # If header-based splitting also failed, fall back to fixed-size chunks
@@ -49,10 +49,10 @@ def split_into_paragraphs(text: str) -> List[str]:
             words = text.split()
             for i in range(0, len(words), 200):
                 chunk = " ".join(words[i:i + 200])
-                if len(chunk) >= MIN_PARAGRAPH_CHARS:
+                if len(chunk) >= min_length:
                     paragraphs.append(chunk)
     else:
-        paragraphs = [c.strip() for c in chunks if len(c.strip()) >= MIN_PARAGRAPH_CHARS]
+        paragraphs = [c.strip() for c in chunks if len(c.strip()) >= min_length]
 
     # Split oversized paragraphs
     final = []
@@ -64,21 +64,28 @@ def split_into_paragraphs(text: str) -> List[str]:
             sub = ""
             for sent in sentences:
                 if len(sub) + len(sent) > MAX_PARAGRAPH_CHARS and sub:
-                    if len(sub.strip()) >= MIN_PARAGRAPH_CHARS:
+                    if len(sub.strip()) >= min_length:
                         final.append(sub.strip())
                     sub = sent
                 else:
                     sub += (" " + sent) if sub else sent
-            if len(sub.strip()) >= MIN_PARAGRAPH_CHARS:
+            if len(sub.strip()) >= min_length:
                 final.append(sub.strip())
 
     return final
 
 
+def clean_text(text: str) -> str:
+    """Normalize whitespace while preserving paragraph breaks."""
+    text = re.sub(r"[ \t]+", " ", text)
+    text = "\n".join(line.strip() for line in text.split("\n"))
+    text = re.sub(r"\n{4,}", "\n\n", text)
+    return text.strip()
+
+
 def clean_paragraph(text: str) -> str:
     """Clean a single paragraph."""
-    text = re.sub(r"[ \t]+", " ", text)
-    return "\n".join(line.strip() for line in text.split("\n")).strip()
+    return clean_text(text)
 
 
 def compute_paragraph_id(contract_title: str, paragraph: str) -> str:
