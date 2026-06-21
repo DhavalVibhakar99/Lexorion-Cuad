@@ -1,0 +1,59 @@
+{
+  "contract_id": "sample_master_services_agreement",
+  "total_paragraphs": 6,
+  "flagged_paragraphs": 5,
+  "processing_time_seconds": 1.4,
+  "total_cost_usd": 0.0,
+  "risk_scores": {
+    "liability_risk": 0.82,
+    "ip_risk": 0.64,
+    "termination_risk": 0.58,
+    "indemnification": 0.0,
+    "exclusivity": 0.0,
+    "change_of_control": 0.0,
+    "revenue_risk": 0.71,
+    "renewal_expiration": 0.0
+  },
+  "detections": [
+    {
+      "risk_category": "liability_risk",
+      "risk_level": "high",
+      "confidence": 0.91,
+      "summary": "The agreement caps vendor liability at 12 months of fees, with carve-outs for serious breaches.",
+      "model_used": "demo_hybrid",
+      "extracted_clause": "Vendor's aggregate liability arising out of this agreement shall not exceed the fees paid by Customer during the twelve (12) months preceding the claim."
+    },
+    {
+      "risk_category": "ip_risk",
+      "risk_level": "moderate",
+      "confidence": 0.78,
+      "summary": "Customer receives assignment of custom-developed IP after payment, while Vendor retains pre-existing tools.",
+      "model_used": "demo_hybrid",
+      "extracted_clause": "All intellectual property developed by Vendor specifically for Customer under a statement of work shall be assigned to Customer upon full payment."
+    },
+    {
+      "risk_category": "termination_risk",
+      "risk_level": "moderate",
+      "confidence": 0.74,
+      "summary": "Either party can terminate for convenience with 30 days notice, creating continuity risk.",
+      "model_used": "demo_hybrid",
+      "extracted_clause": "Either party may terminate this Agreement for convenience upon thirty (30) days' prior written notice."
+    },
+    {
+      "risk_category": "revenue_risk",
+      "risk_level": "high",
+      "confidence": 0.88,
+      "summary": "Customer has a first-year minimum spend commitment and must pay any shortfall.",
+      "model_used": "demo_hybrid",
+      "extracted_clause": "Customer shall purchase a minimum of $250,000 in services during the first contract year."
+    }
+  ],
+  "unknown_risk_candidates": [
+    {
+      "is_unknown_risk": true,
+      "suggested_category": "Data Privacy Risk",
+      "reason": "The clause describes handling of customer personal data and breach notification obligations, which is not one of the current 8 mapped risk categories.",
+      "evidence": "Vendor shall notify Customer within seventy-two (72) hours of becoming aware of any security incident involving Customer personal data."
+    }
+  ]
+}

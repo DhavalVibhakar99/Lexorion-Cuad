@@ -1,0 +1,13 @@
+MASTER SERVICES AGREEMENT
+
+The Vendor shall provide software implementation and support services to the Customer. Vendor will process Customer Data only as necessary to provide the services and shall maintain reasonable administrative, technical, and physical safeguards.
+
+Vendor shall notify Customer within seventy-two (72) hours of becoming aware of any security incident involving Customer personal data. Vendor shall cooperate with Customer in investigating the incident and providing legally required notices.
+
+IN NO EVENT SHALL VENDOR'S AGGREGATE LIABILITY ARISING OUT OF THIS AGREEMENT EXCEED THE FEES PAID BY CUSTOMER DURING THE TWELVE (12) MONTHS PRECEDING THE CLAIM, except for fraud, willful misconduct, breach of confidentiality, or data protection obligations.
+
+All intellectual property developed by Vendor specifically for Customer under a statement of work shall be assigned to Customer upon full payment. Vendor retains ownership of its pre-existing tools, templates, and know-how.
+
+Either party may terminate this Agreement for convenience upon thirty (30) days' prior written notice. Upon termination, Vendor shall return or destroy Customer confidential information and provide reasonable transition assistance.
+
+Customer shall purchase a minimum of $250,000 in services during the first contract year. If Customer fails to meet the minimum commitment, Customer shall pay the difference within thirty (30) days after year end.

@@ -20,6 +20,9 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
+# Editor history/backups
+.history/
+
 # Data and model artifacts
 data/raw/
 data/processed/

@@ -1,0 +1,8 @@
+[
+  {
+    "is_unknown_risk": true,
+    "suggested_category": "Data Privacy Risk",
+    "reason": "The clause describes handling of customer personal data and breach notification obligations.",
+    "evidence": "Vendor shall notify Customer within 72 hours of any security incident..."
+  }
+]
