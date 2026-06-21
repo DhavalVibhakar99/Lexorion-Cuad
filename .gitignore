@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Local environment variables and secrets
+.env
+.env.*
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and model artifacts
+data/raw/
+data/processed/
+data/evaluation/
+checkpoints/
+
+# LLM/API caches
+llm_cache/
+data/processed/llm_cache/
+
+# Logs
+*.log
