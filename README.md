@@ -1,17 +1,57 @@
-# Contract Risk Intelligence System
+# Lexorion: Contract Risk Intelligence System
 
-A hybrid ML/LLM pipeline for automated legal contract risk analysis, trained on CUAD and evaluated against real-world SEC filings.
+A collaborative AI/data science project for automated legal contract risk analysis. Lexorion uses the CUAD contract dataset to detect business-relevant legal risk clauses and turn long contract text into a structured risk profile.
+
+> Current status: data pipeline and dashboard prototype are in place. Model training, final evaluation metrics, and deployment are the next major milestones.
 
 ## What This Does
 
-Upload a contract → System extracts and classifies risk clauses across 8 categories → Returns a risk profile with confidence scores, plain-English summaries, and benchmarking against 500+ contracts.
+Lexorion is designed to:
+
+1. Accept contract text as input.
+2. Split the contract into analyzable paragraphs.
+3. Detect clauses related to legal/business risk.
+4. Group detailed CUAD clause labels into 8 business-friendly risk categories.
+5. Generate confidence scores, plain-English summaries, and a contract-level risk profile.
+
+In plain English: the system reads a contract and highlights the parts that may create liability, IP, termination, revenue, or other business risks.
+
+## What Is CUAD?
+
+CUAD stands for **Contract Understanding Atticus Dataset**. It is a public legal contract dataset where important clauses have been labeled by category.
+
+The original dataset contains 41 detailed legal clause labels. Lexorion maps the most relevant labels into 8 broader risk groups so the output is easier for non-legal business users to understand.
+
+Example:
+
+```text
+Limitation of Liability
+Cap on Liability
+Uncapped Liability
+Liquidated Damages
+→ Liability Risk
+```
+
+## Current Project Status
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| CUAD download/parsing | Complete | Converts CUAD from QA-style records into structured tables. |
+| Risk category mapping | Complete | Maps selected CUAD labels into 8 business-facing risk groups. |
+| Paragraph chunking | Complete | Splits contracts into paragraphs and creates paragraph-level labels. |
+| Tests | Passing | `22` pipeline/helper tests currently pass. |
+| Streamlit dashboard | Prototype | Supports text input and sample risk visualization. |
+| DeBERTa training | Planned/In progress | Training/evaluation results still need to be generated. |
+| LLM classification | Planned/In progress | Prompting and cache layer exist; final evaluation is pending. |
+| Hybrid model comparison | Pending | README will be updated once real metrics exist. |
+| Deployment | Pending | Final app deployment has not been completed yet. |
 
 ## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Contract Input  │────▶│  Clause Detector  │────▶│  Risk Classifier │
-│  (PDF/TXT)       │     │  (DeBERTa-base)   │     │  (LLM + Rules)   │
+│  (TXT now)       │     │  (DeBERTa-base)   │     │  (LLM + Rules)   │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                                                           │
                               ┌────────────────────────────┘
@@ -22,11 +62,11 @@ Upload a contract → System extracts and classifies risk clauses across 8 categ
                     └─────────────────┘     └─────────────────┘
 ```
 
-## Risk Categories (8 focus areas from CUAD's 41)
+## Risk Categories
 
 | Category | CUAD Labels Mapped | Why It Matters |
 |----------|-------------------|----------------|
-| **Liability Risk** | Limitation of Liability, Cap on Liability, Uncapped Liability | Financial exposure |
+| **Liability Risk** | Limitation of Liability, Cap on Liability, Uncapped Liability, Liquidated Damages | Financial exposure |
 | **IP Risk** | IP Ownership Assignment, License Grant, Non-Compete | Intellectual property loss |
 | **Termination Risk** | Termination for Convenience, Effect of Termination | Business continuity |
 | **Indemnification** | Indemnification, Insurance | Who pays when things go wrong |
@@ -98,8 +138,8 @@ contract-risk-intel/
 
 ```bash
 # Clone and setup
-git clone https://github.com/<your-username>/contract-risk-intel.git
-cd contract-risk-intel
+git clone https://github.com/sahilshinde-45/Lexorion.git
+cd Lexorion
 pip install -r requirements.txt
 
 # Download CUAD dataset
@@ -118,16 +158,25 @@ streamlit run src/dashboard/app.py
 
 ## Results
 
+Final model metrics are not available yet. The next evaluation milestone is to compare DeBERTa, LLM-only, and hybrid predictions on the held-out CUAD test split.
+
 | Approach | Avg F1 | Latency/Contract | Cost/Contract | Best For |
 |----------|--------|-----------------|---------------|----------|
-| Fine-tuned DeBERTa | TBD | TBD | $0 (local) | TBD |
-| LLM (few-shot) | TBD | TBD | ~$0.02 | TBD |
-| Hybrid Pipeline | TBD | TBD | ~$0.005 | TBD |
+| Fine-tuned DeBERTa | Pending | Pending | $0 local inference | Fast, low-cost screening |
+| LLM few-shot | Pending | Pending | API usage required | Explainable clause analysis |
+| Hybrid Pipeline | Pending | Pending | Lower than LLM-only | Cost-aware risk detection |
+
+## Why A Hybrid Approach?
+
+Contracts are long and legal language can be subtle. Sending every paragraph to a paid LLM can be slow and expensive. Lexorion is designed to use:
+
+- **DeBERTa** for fast local clause detection.
+- **LLM classification** for harder cases that need extraction and plain-English explanation.
+- **Risk scoring** to aggregate individual clause findings into a contract-level profile.
 
 ## Team
 
-- **Person A** (Engineering Lead): Data pipeline, model training, dashboard, deployment
-- **Person B** (Analysis Lead): EDA, evaluation framework, prompt engineering, blog post
+This is a collaborative project. Individual responsibilities and final ownership notes should be documented before the project is submitted or published as a portfolio artifact.
 
 ## License
 
