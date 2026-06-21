@@ -1,2 +1,2 @@
 Approach,Macro F1,Macro Precision,Macro Recall,Avg Latency/Contract,Cost/Contract
-BASELINE,0.539,0.412,0.798,<1s,$0 (local)
+BASELINE,0.638,0.628,0.682,<1s,$0 (local)

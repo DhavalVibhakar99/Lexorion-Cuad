@@ -163,7 +163,7 @@ Current baseline metrics are available. The next evaluation milestone is to comp
 
 | Approach | Avg F1 | Latency/Contract | Cost/Contract | Best For |
 |----------|--------|-----------------|---------------|----------|
-| TF-IDF + Logistic Regression Baseline | 0.539 | <1s | $0 local inference | Fast benchmark before expensive models |
+| TF-IDF + Logistic Regression Baseline | 0.638 | <1s | $0 local inference | Fast benchmark before expensive models |
 | Fine-tuned DeBERTa | Pending | Pending | $0 local inference | Fast, low-cost screening |
 | LLM few-shot | Pending | Pending | API usage required | Explainable clause analysis |
 | Hybrid Pipeline | Pending | Pending | Lower than LLM-only | Cost-aware risk detection |

@@ -26,9 +26,25 @@ def _label_columns(df: pd.DataFrame) -> list[str]:
     return [col for col in df.columns if col.startswith("label_")]
 
 
+def _best_threshold(y_true, y_score) -> tuple[float, float]:
+    """Choose a decision threshold on validation data using F1."""
+    best_threshold = 0.5
+    best_f1 = -1.0
+
+    for threshold in [x / 100 for x in range(10, 91, 5)]:
+        y_pred = (y_score >= threshold).astype(int)
+        f1 = f1_score(y_true, y_pred, zero_division=0)
+        if f1 > best_f1:
+            best_threshold = threshold
+            best_f1 = f1
+
+    return best_threshold, best_f1
+
+
 def train_baseline() -> pd.DataFrame:
     """Train one baseline classifier per risk category and save test predictions."""
     train_df = pd.read_parquet(PROCESSED_DIR / "paragraphs_train.parquet")
+    val_df = pd.read_parquet(PROCESSED_DIR / "paragraphs_val.parquet")
     test_df = pd.read_parquet(PROCESSED_DIR / "paragraphs_test.parquet")
 
     label_cols = _label_columns(train_df)
@@ -87,13 +103,17 @@ def train_baseline() -> pd.DataFrame:
         model.fit(train_df["paragraph"], y_train)
         train_seconds = time.time() - start
 
-        y_pred = model.predict(test_df["paragraph"])
+        val_scores = model.predict_proba(val_df["paragraph"])[:, 1]
+        threshold, val_f1 = _best_threshold(val_df[label_col].astype(int).to_numpy(), val_scores)
+
         y_score = model.predict_proba(test_df["paragraph"])[:, 1]
+        y_pred = (y_score >= threshold).astype(int)
 
         precision = precision_score(y_test, y_pred, zero_division=0)
         recall = recall_score(y_test, y_pred, zero_division=0)
         f1 = f1_score(y_test, y_pred, zero_division=0)
 
+        print(f"  Threshold: {threshold:.2f} (val F1={val_f1:.3f})")
         print(f"  Precision: {precision:.3f}")
         print(f"  Recall:    {recall:.3f}")
         print(f"  F1:        {f1:.3f}")
@@ -105,6 +125,8 @@ def train_baseline() -> pd.DataFrame:
                 "precision": precision,
                 "recall": recall,
                 "f1": f1,
+                "threshold": threshold,
+                "val_f1": val_f1,
                 "train_positive": positives,
                 "test_positive": int(y_test.sum()),
                 "train_seconds": round(train_seconds, 2),
