@@ -74,7 +74,10 @@ def load_comparison_results():
     try:
         return pd.read_csv(PROCESSED_DIR / "model_comparison.csv")
     except FileNotFoundError:
-        return None
+        try:
+            return pd.read_csv(EXAMPLES_DIR / "model_comparison.csv")
+        except FileNotFoundError:
+            return None
 
 
 @st.cache_data
@@ -83,7 +86,10 @@ def load_detailed_comparison():
     try:
         return pd.read_csv(PROCESSED_DIR / "model_comparison_detailed.csv")
     except FileNotFoundError:
-        return None
+        try:
+            return pd.read_csv(EXAMPLES_DIR / "model_comparison_detailed.csv")
+        except FileNotFoundError:
+            return None
 
 
 @st.cache_data

@@ -41,7 +41,8 @@ Liquidated Damages
 | Paragraph chunking | Complete | Splits contracts into paragraphs and creates paragraph-level labels. |
 | Tests | Passing | `22` pipeline/helper tests currently pass. |
 | Streamlit dashboard | Prototype | Supports text input and sample risk visualization. |
-| DeBERTa training | Planned/In progress | Training/evaluation results still need to be generated. |
+| Baseline model | Complete | TF-IDF + logistic regression baseline trained across all 8 categories. |
+| DeBERTa training | Planned/In progress | Transformer training/evaluation is the next model milestone. |
 | LLM classification | Planned/In progress | Prompting and cache layer exist; final evaluation is pending. |
 | Hybrid model comparison | Pending | README will be updated once real metrics exist. |
 | Deployment | Pending | Final app deployment has not been completed yet. |
@@ -158,10 +159,11 @@ streamlit run src/dashboard/app.py
 
 ## Results
 
-Final model metrics are not available yet. The next evaluation milestone is to compare DeBERTa, LLM-only, and hybrid predictions on the held-out CUAD test split.
+Current baseline metrics are available. The next evaluation milestone is to compare DeBERTa, LLM-only, and hybrid predictions against this baseline on the held-out CUAD test split.
 
 | Approach | Avg F1 | Latency/Contract | Cost/Contract | Best For |
 |----------|--------|-----------------|---------------|----------|
+| TF-IDF + Logistic Regression Baseline | 0.539 | <1s | $0 local inference | Fast benchmark before expensive models |
 | Fine-tuned DeBERTa | Pending | Pending | $0 local inference | Fast, low-cost screening |
 | LLM few-shot | Pending | Pending | API usage required | Explainable clause analysis |
 | Hybrid Pipeline | Pending | Pending | Lower than LLM-only | Cost-aware risk detection |

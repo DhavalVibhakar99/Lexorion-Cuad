@@ -29,6 +29,16 @@ def load_deberta_predictions() -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def load_baseline_predictions() -> pd.DataFrame:
+    """Load TF-IDF baseline predictions from saved inference results."""
+    pred_file = PROCESSED_DIR / "baseline_predictions.parquet"
+    if pred_file.exists():
+        return pd.read_parquet(pred_file)
+
+    print("No baseline predictions found. Run baseline_detector.py first.")
+    return pd.DataFrame()
+
+
 def load_llm_predictions() -> pd.DataFrame:
     """Load LLM predictions from saved inference results."""
     pred_file = PROCESSED_DIR / "llm_predictions.parquet"
@@ -58,6 +68,14 @@ def compare_models():
     print("=" * 70)
     
     results = {}
+
+    # === Baseline ===
+    baseline_df = load_baseline_predictions()
+    if not baseline_df.empty:
+        print("\n--- Baseline Results ---")
+        baseline_metrics = evaluate_predictions(baseline_df, "risk_category")
+        print_evaluation_report(baseline_metrics)
+        results["baseline"] = baseline_metrics
     
     # === DeBERTa ===
     deberta_df = load_deberta_predictions()
@@ -125,6 +143,9 @@ def _load_approach_metadata(approach: str) -> dict:
     if approach == "deberta":
         # Estimate from training results
         meta["avg_latency"] = "~2s"
+        meta["cost_per_contract"] = "$0 (local)"
+    elif approach == "baseline":
+        meta["avg_latency"] = "<1s"
         meta["cost_per_contract"] = "$0 (local)"
     elif approach == "llm":
         meta["avg_latency"] = "~30s"
