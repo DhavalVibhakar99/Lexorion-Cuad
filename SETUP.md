@@ -128,10 +128,27 @@ Install these VS Code extensions (optional but helpful):
 Create a `.env` file in the project root:
 
 ```bash
-echo "ANTHROPIC_API_KEY=your-key-here" > .env
+echo "OPENROUTER_API_KEY=your-key-here" > .env
 ```
 
-Get your Anthropic API key from: https://console.anthropic.com/settings/keys
+Lexorion can use OpenRouter for LLM evaluation. OpenRouter gives access to many
+models through one OpenAI-compatible endpoint.
+
+Optional `.env` values:
+
+```bash
+OPENROUTER_API_KEY=your-key-here
+OPENROUTER_MODEL=openai/gpt-4o-mini
+OPENROUTER_SITE_URL=https://github.com/sahilshinde-45/Lexorion
+OPENROUTER_APP_NAME=Lexorion Contract Risk Intelligence
+```
+
+You can still use direct Anthropic/OpenAI keys later if needed:
+
+```bash
+ANTHROPIC_API_KEY=your-anthropic-key
+OPENAI_API_KEY=your-openai-key
+```
 
 > This file is already in `.gitignore` so it won't get pushed to GitHub.
 
@@ -159,7 +176,32 @@ All tests should pass.
 
 ---
 
-## Step 10: Launch the dashboard (optional, to see the UI)
+## Step 10: Run baseline model reports
+
+```bash
+python -m src.models.baseline_detector
+python -m src.evaluation.error_analysis --approach baseline
+python -m src.evaluation.model_comparison
+```
+
+This creates local files under `data/processed/` and Git-friendly sample files
+under `examples/`. It also creates the dashboard inference artifact:
+
+```text
+checkpoints/baseline_tfidf_logreg.joblib
+```
+
+That artifact is intentionally gitignored because it is generated locally.
+
+To run a small OpenRouter LLM evaluation later:
+
+```bash
+python -m src.models.llm_classifier --provider openrouter --model openai/gpt-4o-mini --max_samples 20
+```
+
+---
+
+## Step 11: Launch the dashboard (optional, to see the UI)
 
 ```bash
 streamlit run src/dashboard/app.py

@@ -12,14 +12,18 @@ Run:
 import time
 from pathlib import Path
 
+import joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score
 from sklearn.pipeline import Pipeline
+import yaml
 
-
+CONFIG_DIR = Path("configs")
 PROCESSED_DIR = Path("data/processed")
+CHECKPOINT_DIR = Path("checkpoints")
+BASELINE_MODEL_PATH = CHECKPOINT_DIR / "baseline_tfidf_logreg.joblib"
 
 
 def _label_columns(df: pd.DataFrame) -> list[str]:
@@ -53,6 +57,8 @@ def train_baseline() -> pd.DataFrame:
 
     all_predictions = []
     summary_rows = []
+    trained_models = {}
+    thresholds = {}
 
     print("=" * 70)
     print("TRAINING BASELINE: TF-IDF + Logistic Regression")
@@ -104,7 +110,11 @@ def train_baseline() -> pd.DataFrame:
         train_seconds = time.time() - start
 
         val_scores = model.predict_proba(val_df["paragraph"])[:, 1]
-        threshold, val_f1 = _best_threshold(val_df[label_col].astype(int).to_numpy(), val_scores)
+        threshold, val_f1 = _best_threshold(
+            val_df[label_col].astype(int).to_numpy(), val_scores
+        )
+        trained_models[category] = model
+        thresholds[category] = threshold
 
         y_score = model.predict_proba(test_df["paragraph"])[:, 1]
         y_pred = (y_score >= threshold).astype(int)
@@ -156,14 +166,120 @@ def train_baseline() -> pd.DataFrame:
     summary_path = PROCESSED_DIR / "baseline_training_summary.csv"
     summary_df.to_csv(summary_path, index=False)
 
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    artifact = {
+        "model_name": "tfidf_logistic_regression",
+        "models": trained_models,
+        "thresholds": thresholds,
+        "label_columns": label_cols,
+        "summary": summary_rows,
+    }
+    joblib.dump(artifact, BASELINE_MODEL_PATH)
+
     print("\n" + "=" * 70)
     print("BASELINE TRAINING COMPLETE")
     print("=" * 70)
     print(f"Saved predictions to {predictions_path}")
     print(f"Saved summary to {summary_path}")
+    print(f"Saved model artifact to {BASELINE_MODEL_PATH}")
     print(f"Total time: {time.time() - start_all:.1f}s")
 
     return predictions_df
+
+
+def load_baseline_model(model_path: Path = BASELINE_MODEL_PATH) -> dict:
+    """Load the trained baseline model artifact."""
+    if not model_path.exists():
+        raise FileNotFoundError(
+            f"No baseline model artifact found at {model_path}. "
+            "Run: python -m src.models.baseline_detector"
+        )
+    return joblib.load(model_path)
+
+
+def _category_display_names() -> dict[str, str]:
+    try:
+        with open(CONFIG_DIR / "category_mapping.yaml") as f:
+            config = yaml.safe_load(f)
+    except FileNotFoundError:
+        return {}
+
+    return {
+        key: value.get("display_name", key.replace("_", " ").title())
+        for key, value in config.get("risk_categories", {}).items()
+    }
+
+
+def _risk_level(score: float) -> str:
+    if score >= 0.85:
+        return "high"
+    if score >= 0.65:
+        return "moderate"
+    if score >= 0.45:
+        return "low"
+    return "none"
+
+
+def analyze_contract_with_baseline(
+    paragraphs: list[str],
+    contract_id: str = "uploaded",
+    max_detections: int = 30,
+) -> dict:
+    """Analyze contract paragraphs using the saved baseline artifact."""
+    artifact = load_baseline_model()
+    models = artifact["models"]
+    thresholds = artifact["thresholds"]
+    display_names = _category_display_names()
+
+    start = time.time()
+    detections = []
+    risk_scores = {category: 0.0 for category in models}
+
+    for idx, paragraph in enumerate(paragraphs):
+        paragraph_id = f"{contract_id}_p{idx:04d}"
+        for category, model in models.items():
+            score = float(model.predict_proba([paragraph])[0, 1])
+            threshold = float(thresholds.get(category, 0.5))
+            is_present = score >= threshold
+            risk_scores[category] = max(
+                risk_scores.get(category, 0.0), score if is_present else 0.0
+            )
+
+            if not is_present:
+                continue
+
+            display_name = display_names.get(
+                category, category.replace("_", " ").title()
+            )
+            detections.append(
+                {
+                    "paragraph_id": paragraph_id,
+                    "risk_category": category,
+                    "is_present": True,
+                    "confidence": score,
+                    "risk_level": _risk_level(score),
+                    "summary": (
+                        f"Baseline model flagged this paragraph as {display_name} "
+                        f"with {score:.0%} confidence."
+                    ),
+                    "extracted_clause": paragraph,
+                    "model_used": artifact.get("model_name", "baseline"),
+                    "threshold": threshold,
+                }
+            )
+
+    detections = sorted(detections, key=lambda item: item["confidence"], reverse=True)
+    flagged_paragraphs = len({item["paragraph_id"] for item in detections})
+
+    return {
+        "contract_id": contract_id,
+        "total_paragraphs": len(paragraphs),
+        "flagged_paragraphs": flagged_paragraphs,
+        "risk_scores": {key: round(value, 3) for key, value in risk_scores.items()},
+        "processing_time_seconds": round(time.time() - start, 2),
+        "total_cost_usd": 0.0,
+        "detections": detections[:max_detections],
+    }
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 A collaborative AI/data science project for automated legal contract risk analysis. Lexorion uses the CUAD contract dataset to detect business-relevant legal risk clauses and turn long contract text into a structured risk profile.
 
-> Current status: data pipeline and dashboard prototype are in place. Model training, final evaluation metrics, and deployment are the next major milestones.
+> Current status: data pipeline, dashboard prototype, baseline model, and baseline error analysis are in place. DeBERTa, OpenRouter-based LLM evaluation, hybrid routing, and deployment are the next major milestones.
 
 ## What This Does
 
@@ -41,9 +41,10 @@ Liquidated Damages
 | Paragraph chunking | Complete | Splits contracts into paragraphs and creates paragraph-level labels. |
 | Tests | Passing | `22` pipeline/helper tests currently pass. |
 | Streamlit dashboard | Prototype | Supports text input and sample risk visualization. |
-| Baseline model | Complete | TF-IDF + logistic regression baseline trained across all 8 categories. |
+| Baseline model | Complete | TF-IDF + logistic regression baseline trained across all 8 categories and saved for dashboard inference. |
+| Baseline error analysis | Complete | Generates false-positive/false-negative samples and a Markdown report. |
 | DeBERTa training | Planned/In progress | Transformer training/evaluation is the next model milestone. |
-| LLM classification | Planned/In progress | Prompting and cache layer exist; final evaluation is pending. |
+| LLM classification | Planned/In progress | Prompting and cache layer exist; OpenRouter provider support is wired in. |
 | Hybrid model comparison | Pending | README will be updated once real metrics exist. |
 | Deployment | Pending | Final app deployment has not been completed yet. |
 
@@ -80,7 +81,7 @@ Liquidated Damages
 
 - **Python 3.10+**
 - **PyTorch + HuggingFace Transformers** — DeBERTa fine-tuning
-- **Anthropic/OpenAI API** — LLM reasoning layer
+- **Anthropic/OpenAI/OpenRouter API** — LLM reasoning layer
 - **Streamlit** — Dashboard UI
 - **Pandas + scikit-learn** — Data processing & evaluation
 
@@ -153,6 +154,12 @@ python -m src.data_pipeline.chunk_contracts
 # Run evaluation
 python -m src.evaluation.model_comparison
 
+# Run baseline error analysis
+python -m src.evaluation.error_analysis --approach baseline
+
+# Train and save the baseline dashboard model
+python -m src.models.baseline_detector
+
 # Launch dashboard
 streamlit run src/dashboard/app.py
 ```
@@ -168,6 +175,16 @@ Current baseline metrics are available. The next evaluation milestone is to comp
 | LLM few-shot | Pending | Pending | API usage required | Explainable clause analysis |
 | Hybrid Pipeline | Pending | Pending | Lower than LLM-only | Cost-aware risk detection |
 
+Baseline error analysis samples are available in:
+
+- `examples/baseline_error_summary.csv`
+- `examples/baseline_false_negatives_sample.csv`
+- `examples/baseline_false_positives_sample.csv`
+
+Live dashboard inference uses the local model artifact:
+
+- `checkpoints/baseline_tfidf_logreg.joblib` (generated locally, gitignored)
+
 ## Why A Hybrid Approach?
 
 Contracts are long and legal language can be subtle. Sending every paragraph to a paid LLM can be slow and expensive. Lexorion is designed to use:
@@ -175,6 +192,13 @@ Contracts are long and legal language can be subtle. Sending every paragraph to 
 - **DeBERTa** for fast local clause detection.
 - **LLM classification** for harder cases that need extraction and plain-English explanation.
 - **Risk scoring** to aggregate individual clause findings into a contract-level profile.
+
+The LLM layer can run through OpenRouter using the OpenAI-compatible API:
+
+```bash
+export OPENROUTER_API_KEY="your-key"
+python -m src.models.llm_classifier --provider openrouter --model openai/gpt-4o-mini --max_samples 20
+```
 
 ## Team
 
