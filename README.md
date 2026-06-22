@@ -202,7 +202,8 @@ python -m src.models.llm_classifier --provider openrouter --model openai/gpt-4o-
 
 ## Team
 
-This is a collaborative project. Individual responsibilities and final ownership notes should be documented before the project is submitted or published as a portfolio artifact.
+- **Dhaval Vibhakar** (Engineering Lead): Data pipeline, model training, dashboard, deployment
+- **Sahil Shinde** (Analysis Lead): EDA, evaluation framework, prompt engineering, blog post
 
 ## License
 
