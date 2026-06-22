@@ -35,305 +35,8 @@ st.set_page_config(
 )
 
 
-st.markdown(
-    """
-    <style>
-    :root {
-        --lexorion-blue: #0f4c81;
-        --lexorion-teal: #087f8c;
-        --lexorion-amber: #b7791f;
-        --lexorion-red: #c2410c;
-        --lexorion-ink: #17202a;
-        --lexorion-muted: #667085;
-        --lexorion-border: #d9e2ec;
-        --lexorion-surface: #f7f9fc;
-    }
-    #MainMenu,
-    footer,
-    [data-testid="stToolbar"],
-    [data-testid="stDecoration"],
-    [data-testid="stStatusWidget"] {
-        display: none;
-    }
-    .block-container {
-        padding-top: 1.1rem;
-        padding-bottom: 2rem;
-        max-width: 1320px;
-    }
-    .stApp,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stMain"] {
-        background: #ffffff;
-        color: var(--lexorion-ink);
-    }
-    [data-testid="stHeader"] {
-        background: transparent;
-    }
-    h1, h2, h3, h4, h5, h6, p, label, span {
-        letter-spacing: 0;
-    }
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8fafc 0%, #eef4f8 100%);
-        border-right: 1px solid var(--lexorion-border);
-    }
-    [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {
-        color: var(--lexorion-ink);
-    }
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] span {
-        color: var(--lexorion-ink);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] {
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label {
-        border: 1px solid transparent;
-        border-radius: 8px;
-        padding: 0.55rem 0.65rem;
-        margin: 0;
-        background: transparent;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        border-color: var(--lexorion-border);
-        background: #ffffff;
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-        border-color: rgba(15, 76, 129, 0.28);
-        background: #ffffff;
-        box-shadow: inset 3px 0 0 var(--lexorion-blue);
-    }
-    [data-testid="stSidebar"] div[role="radiogroup"] label > div:first-child {
-        display: none;
-    }
-    .lex-sidebar-brand {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        padding: 0.6rem 0.1rem 1rem 0.1rem;
-        border-bottom: 1px solid var(--lexorion-border);
-        margin-bottom: 1rem;
-    }
-    .lex-logo-mark {
-        width: 42px;
-        height: 42px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
-        color: #ffffff;
-        font-weight: 800;
-        letter-spacing: 0;
-        background: linear-gradient(135deg, #0f4c81 0%, #087f8c 100%);
-        box-shadow: 0 8px 18px rgba(15, 76, 129, 0.18);
-    }
-    .lex-sidebar-name {
-        font-size: 1.22rem;
-        line-height: 1.1;
-        font-weight: 800;
-        color: var(--lexorion-ink);
-        margin: 0;
-    }
-    .lex-sidebar-tagline {
-        font-size: 0.78rem;
-        color: var(--lexorion-muted);
-        margin-top: 0.15rem;
-    }
-    .lex-sidebar-panel {
-        border: 1px solid var(--lexorion-border);
-        background: rgba(255, 255, 255, 0.76);
-        border-radius: 8px;
-        padding: 0.75rem;
-        margin-top: 1rem;
-        color: var(--lexorion-ink);
-    }
-    .lex-sidebar-panel-title {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--lexorion-muted);
-        margin-bottom: 0.4rem;
-        font-weight: 750;
-    }
-    .lex-status-line {
-        display: flex;
-        justify-content: space-between;
-        gap: 0.75rem;
-        font-size: 0.84rem;
-        padding: 0.18rem 0;
-        border-bottom: 1px solid #edf2f7;
-    }
-    .lex-status-line:last-child {
-        border-bottom: 0;
-    }
-    .lex-header {
-        border: 1px solid var(--lexorion-border);
-        border-radius: 8px;
-        padding: 1.15rem 1.25rem;
-        margin-bottom: 1.2rem;
-        background:
-            linear-gradient(135deg, rgba(15, 76, 129, 0.07) 0%, rgba(8, 127, 140, 0.06) 42%, rgba(255,255,255,1) 100%);
-    }
-    .lex-brand {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-    }
-    .lex-heading-wrap {
-        display: flex;
-        align-items: center;
-        gap: 0.95rem;
-    }
-    .lex-header-mark {
-        width: 54px;
-        height: 54px;
-        border-radius: 12px;
-        display: grid;
-        place-items: center;
-        color: #ffffff;
-        font-weight: 850;
-        font-size: 1.1rem;
-        background: linear-gradient(135deg, #0f4c81 0%, #087f8c 100%);
-        box-shadow: 0 12px 26px rgba(15, 76, 129, 0.18);
-        flex: 0 0 auto;
-    }
-    .lex-overline {
-        color: var(--lexorion-teal);
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        margin-bottom: 0.22rem;
-    }
-    .lex-title {
-        font-size: 2rem;
-        line-height: 1.1;
-        font-weight: 850;
-        color: var(--lexorion-ink);
-        margin: 0;
-    }
-    .lex-subtitle {
-        color: var(--lexorion-muted);
-        font-size: 1rem;
-        margin-top: 0.35rem;
-        max-width: 760px;
-    }
-    .lex-pill {
-        border: 1px solid var(--lexorion-border);
-        background: #ffffff;
-        color: #344054;
-        border-radius: 8px;
-        padding: 0.35rem 0.7rem;
-        font-size: 0.84rem;
-        white-space: nowrap;
-        box-shadow: 0 6px 16px rgba(15, 76, 129, 0.08);
-    }
-    .lex-signal-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1.2rem;
-    }
-    .lex-signal {
-        border: 1px solid var(--lexorion-border);
-        border-radius: 8px;
-        background: #ffffff;
-        padding: 0.85rem;
-        min-height: 86px;
-    }
-    .lex-signal-label {
-        color: var(--lexorion-muted);
-        font-size: 0.74rem;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        font-weight: 750;
-        margin-bottom: 0.35rem;
-    }
-    .lex-signal-value {
-        color: var(--lexorion-ink);
-        font-size: 1.08rem;
-        font-weight: 780;
-        line-height: 1.2;
-    }
-    .lex-signal-note {
-        color: var(--lexorion-muted);
-        font-size: 0.82rem;
-        margin-top: 0.32rem;
-    }
-    .lex-section-note {
-        color: var(--lexorion-muted);
-        margin-top: -0.35rem;
-        margin-bottom: 1rem;
-    }
-    .lex-workspace-label {
-        color: var(--lexorion-muted);
-        font-size: 0.78rem;
-        font-weight: 750;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        margin-bottom: 0.25rem;
-    }
-    .lex-footer {
-        border-top: 1px solid var(--lexorion-border);
-        color: var(--lexorion-muted);
-        text-align: center;
-        padding-top: 1rem;
-        margin-top: 1.5rem;
-        font-size: 0.9rem;
-    }
-    div[data-testid="stMetric"] {
-        border: 1px solid var(--lexorion-border);
-        border-radius: 8px;
-        padding: 0.85rem 1rem;
-        background: #ffffff;
-    }
-    div[data-testid="stMetricLabel"] {
-        color: var(--lexorion-muted);
-    }
-    .stButton > button {
-        border-radius: 7px;
-        font-weight: 650;
-        min-height: 2.7rem;
-    }
-    textarea,
-    input,
-    [data-baseweb="textarea"],
-    [data-baseweb="input"] {
-        background: #ffffff;
-        color: var(--lexorion-ink);
-    }
-    @media (max-width: 900px) {
-        .lex-brand {
-            align-items: flex-start;
-            flex-direction: column;
-        }
-        .lex-signal-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-    }
-    @media (max-width: 640px) {
-        .lex-heading-wrap {
-            align-items: flex-start;
-        }
-        .lex-header-mark {
-            width: 44px;
-            height: 44px;
-        }
-        .lex-title {
-            font-size: 1.65rem;
-        }
-        .lex-signal-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+_css = (ROOT_DIR / "src" / "dashboard" / "style.css").read_text()
+st.markdown(f"<style>{_css}</style>", unsafe_allow_html=True)
 
 
 # === Sidebar ===
@@ -476,17 +179,16 @@ def render_risk_heatmap(risk_scores: dict):
     categories = list(risk_scores.keys())
     scores = list(risk_scores.values())
 
-    # Color based on severity
     colors = []
     for s in scores:
         if s >= 0.7:
-            colors.append("#ef4444")  # red
+            colors.append("#e5534b")
         elif s >= 0.4:
-            colors.append("#f59e0b")  # amber
+            colors.append("#d4952a")
         elif s > 0:
-            colors.append("#22c55e")  # green
+            colors.append("#3fb950")
         else:
-            colors.append("#94a3b8")  # gray
+            colors.append("#2c2920")
 
     fig = go.Figure(
         go.Bar(
@@ -494,21 +196,25 @@ def render_risk_heatmap(risk_scores: dict):
             y=[c.replace("_", " ").title() for c in categories],
             orientation="h",
             marker_color=colors,
+            marker_line_width=0,
             text=[f"{s:.2f}" for s in scores],
             textposition="auto",
+            textfont=dict(color="#e8e3d8", size=11),
         )
     )
 
     fig.update_layout(
-        title="Contract Risk Exposure by Category",
-        xaxis_title="Risk Score (0-1)",
+        title="Risk Exposure by Category",
+        xaxis_title="Risk Score",
         yaxis_title="",
         height=400,
-        margin=dict(l=20, r=20, t=40, b=20),
-        xaxis=dict(range=[0, 1]),
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        font=dict(color="#17202a"),
+        margin=dict(l=8, r=8, t=40, b=8),
+        xaxis=dict(range=[0, 1], gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.08)"),
+        yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(28,26,21,0.6)",
+        font=dict(color="#7a7168", family="sans-serif", size=12),
+        title_font=dict(color="#e8e3d8", size=14),
     )
 
     return fig
@@ -863,7 +569,7 @@ elif page == "Error Analysis":
             y="risk_category",
             orientation="h",
             color="false_negative_rate",
-            color_continuous_scale="Blues",
+            color_continuous_scale=[[0, "#3fb950"], [0.5, "#d4952a"], [1, "#e5534b"]],
             title="Baseline Weak Spots",
             labels={
                 "f1": "F1 Score",
@@ -872,7 +578,12 @@ elif page == "Error Analysis":
             },
             height=430,
         )
-        fig.update_layout(paper_bgcolor="white", plot_bgcolor="white")
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(28,26,21,0.6)",
+            font=dict(color="#7a7168"),
+            title_font=dict(color="#e8e3d8"),
+        )
         st.plotly_chart(fig, width="stretch")
 
         tab1, tab2 = st.tabs(["Missed risks", "False alarms"])
