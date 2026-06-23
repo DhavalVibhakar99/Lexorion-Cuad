@@ -197,8 +197,16 @@ The LLM layer can run through OpenRouter using the OpenAI-compatible API:
 
 ```bash
 export OPENROUTER_API_KEY="your-key"
-python -m src.models.llm_classifier --provider openrouter --model openai/gpt-4o-mini --max_samples 20
+python -m src.models.llm_classifier \
+  --provider openrouter \
+  --model openai/gpt-oss-120b:free \
+  --max_samples 4 \
+  --max_calls 30 \
+  --categories termination_risk revenue_risk exclusivity
 ```
+
+The LLM evaluator includes guardrails for API-call budgets, category allowlists,
+JSON validation, caching, and malformed-response handling.
 
 ## Team
 

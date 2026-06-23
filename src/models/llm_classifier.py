@@ -37,6 +37,14 @@ except ImportError:
 CONFIG_DIR = Path("configs")
 PROCESSED_DIR = Path("data/processed")
 CACHE_DIR = Path("data/processed/llm_cache")
+DEFAULT_LLM_MAX_CALLS = int(os.getenv("LEXORION_LLM_MAX_CALLS", "40"))
+DEFAULT_LLM_CATEGORIES = [
+    "termination_risk",
+    "revenue_risk",
+    "exclusivity",
+]
+VALID_CLASSIFICATIONS = {"PRESENT", "ABSENT", "ERROR"}
+VALID_RISK_LEVELS = {"none", "low", "moderate", "high", "critical"}
 
 if load_dotenv is not None:
     load_dotenv()
@@ -165,12 +173,23 @@ Respond in this exact JSON format (no other text):
 class LLMClassifier:
     """LLM-based clause classifier with caching and cost tracking."""
 
-    def __init__(self, provider: str = "anthropic", model: str = None):
+    def __init__(
+        self,
+        provider: str = "anthropic",
+        model: str = None,
+        max_calls: int = DEFAULT_LLM_MAX_CALLS,
+        allowed_categories: Optional[List[str]] = None,
+    ):
         self.provider = provider
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_calls = 0
+        self.cache_hits = 0
+        self.blocked_calls = 0
+        self.validation_errors = 0
         self.total_time = 0
+        self.max_calls = max_calls
+        self.allowed_categories = set(allowed_categories or [])
 
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -229,16 +248,88 @@ class LLMClassifier:
         with open(cache_file, "w") as f:
             json.dump(result, f)
 
+    def _guardrail_error(self, summary: str) -> dict:
+        self.blocked_calls += 1
+        return {
+            "classification": "ERROR",
+            "risk_level": "none",
+            "extracted_clause": "",
+            "summary": summary,
+            "confidence": 0.0,
+            "guardrail_blocked": True,
+        }
+
+    def _validate_result(self, result: dict) -> dict:
+        """Validate and normalize the LLM JSON response."""
+        required = {
+            "classification": str,
+            "risk_level": str,
+            "extracted_clause": str,
+            "summary": str,
+            "confidence": (int, float),
+        }
+
+        if not isinstance(result, dict):
+            self.validation_errors += 1
+            return self._guardrail_error("Invalid LLM response: expected JSON object.")
+
+        for field, expected_type in required.items():
+            if field not in result or not isinstance(result[field], expected_type):
+                self.validation_errors += 1
+                return self._guardrail_error(
+                    f"Invalid LLM response: missing or invalid field '{field}'."
+                )
+
+        classification = result["classification"].upper().strip()
+        risk_level = result["risk_level"].lower().strip()
+
+        if classification not in VALID_CLASSIFICATIONS:
+            self.validation_errors += 1
+            return self._guardrail_error(
+                f"Invalid LLM classification: {result['classification']!r}."
+            )
+
+        if risk_level not in VALID_RISK_LEVELS:
+            self.validation_errors += 1
+            return self._guardrail_error(
+                f"Invalid LLM risk level: {result['risk_level']!r}."
+            )
+
+        confidence = max(0.0, min(1.0, float(result["confidence"])))
+        if classification == "ABSENT":
+            risk_level = "none"
+            result["extracted_clause"] = ""
+
+        return {
+            "classification": classification,
+            "risk_level": risk_level,
+            "extracted_clause": result["extracted_clause"][:1500],
+            "summary": result["summary"][:500],
+            "confidence": confidence,
+            "guardrail_blocked": False,
+        }
+
     def classify_paragraph(self, paragraph: str, risk_category: str) -> dict:
         """
         Classify a single paragraph for a specific risk category.
         Returns parsed JSON response from the LLM.
         """
+        if self.allowed_categories and risk_category not in self.allowed_categories:
+            return self._guardrail_error(
+                f"Category '{risk_category}' is not allowed for this guarded LLM run."
+            )
+
         # Check cache
         cache_key = self._cache_key(paragraph, risk_category)
         cached = self._get_cached(cache_key)
         if cached is not None:
+            self.cache_hits += 1
             return cached
+
+        if self.max_calls is not None and self.total_calls >= self.max_calls:
+            return self._guardrail_error(
+                f"LLM call budget reached ({self.max_calls} API calls)."
+            )
 
         prompt = build_classification_prompt(paragraph, risk_category, {})
 
@@ -282,9 +373,10 @@ class LLMClassifier:
                 cleaned = cleaned.split("\n", 1)[1]
                 cleaned = cleaned.rsplit("```", 1)[0]
 
-            result = json.loads(cleaned)
+            result = self._validate_result(json.loads(cleaned))
 
         except json.JSONDecodeError:
+            self.validation_errors += 1
             result = {
                 "classification": "ERROR",
                 "risk_level": "none",
@@ -345,6 +437,9 @@ class LLMClassifier:
 
         return {
             "total_calls": self.total_calls,
+            "cache_hits": self.cache_hits,
+            "blocked_calls": self.blocked_calls,
+            "validation_errors": self.validation_errors,
             "total_input_tokens": self.total_input_tokens,
             "total_output_tokens": self.total_output_tokens,
             "estimated_cost_usd": round(input_cost + output_cost, 4),
@@ -356,6 +451,9 @@ class LLMClassifier:
         cost = self.get_cost_estimate()
         print(f"\n--- LLM Usage Report ---")
         print(f"  Total calls:      {cost['total_calls']}")
+        print(f"  Cache hits:       {cost['cache_hits']}")
+        print(f"  Blocked calls:    {cost['blocked_calls']}")
+        print(f"  Validation errs:  {cost['validation_errors']}")
         print(f"  Input tokens:     {cost['total_input_tokens']:,}")
         print(f"  Output tokens:    {cost['total_output_tokens']:,}")
         print(f"  Estimated cost:   ${cost['estimated_cost_usd']:.4f}")
@@ -367,6 +465,8 @@ def evaluate_llm_approach(
     max_samples_per_category: int = 100,
     provider: str = "anthropic",
     model: str = None,
+    max_calls: int = DEFAULT_LLM_MAX_CALLS,
+    guarded: bool = True,
 ):
     """
     Run LLM classification on the test set and save predictions.
@@ -380,7 +480,13 @@ def evaluate_llm_approach(
             if col.startswith("label_")
         ]
 
-    classifier = LLMClassifier(provider=provider, model=model)
+    allowed_categories = risk_categories if guarded else None
+    classifier = LLMClassifier(
+        provider=provider,
+        model=model,
+        max_calls=max_calls,
+        allowed_categories=allowed_categories,
+    )
     all_predictions = []
 
     for category in risk_categories:
@@ -420,6 +526,7 @@ def evaluate_llm_approach(
                     "summary": result.get("summary", ""),
                     "extracted_clause": result.get("extracted_clause", ""),
                     "model": classifier.model,
+                    "guardrail_blocked": result.get("guardrail_blocked", False),
                 }
             )
 
@@ -441,11 +548,35 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model", default=None)
     parser.add_argument("--max_samples", type=int, default=100)
+    parser.add_argument("--max_calls", type=int, default=DEFAULT_LLM_MAX_CALLS)
+    parser.add_argument(
+        "--categories",
+        nargs="*",
+        default=None,
+        help="Risk categories to evaluate. Recommended for guarded OpenRouter runs.",
+    )
+    parser.add_argument(
+        "--all_categories",
+        action="store_true",
+        help="Evaluate all categories instead of the guarded weak-category default.",
+    )
+    parser.add_argument(
+        "--unguarded",
+        action="store_true",
+        help="Disable category allowlist guardrail. Max-call guardrail still applies.",
+    )
     args = parser.parse_args()
 
     if args.mode == "evaluate":
+        categories = args.categories
+        if categories is None and not args.all_categories:
+            categories = DEFAULT_LLM_CATEGORIES
+
         evaluate_llm_approach(
+            risk_categories=categories,
             provider=args.provider,
             model=args.model,
             max_samples_per_category=args.max_samples,
+            max_calls=args.max_calls,
+            guarded=not args.unguarded,
         )

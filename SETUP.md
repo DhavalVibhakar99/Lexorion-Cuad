@@ -193,11 +193,25 @@ checkpoints/baseline_tfidf_logreg.joblib
 
 That artifact is intentionally gitignored because it is generated locally.
 
-To run a small OpenRouter LLM evaluation later:
+To run a guarded OpenRouter LLM evaluation later:
 
 ```bash
-python -m src.models.llm_classifier --provider openrouter --model openai/gpt-4o-mini --max_samples 20
+python -m src.models.llm_classifier \
+  --provider openrouter \
+  --model openai/gpt-oss-120b:free \
+  --max_samples 4 \
+  --max_calls 30 \
+  --categories termination_risk revenue_risk exclusivity
 ```
+
+Guardrails:
+
+- `--max_calls` caps real API calls, even if `--max_samples` is too high.
+- `--categories` limits which risk categories can be sent to the LLM.
+- By default, Lexorion evaluates only the weak categories unless you pass
+  `--all_categories`.
+- Malformed LLM JSON is marked as `ERROR` and not trusted.
+- Cached responses do not count as new API calls.
 
 ---
 
