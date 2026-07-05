@@ -1,2 +1,5 @@
-Approach,Macro F1,Macro Precision,Macro Recall,Avg Latency/Contract,Cost/Contract
-BASELINE,0.638,0.628,0.682,<1s,$0 (local)
+Approach,Macro F1,Macro Precision,Macro Recall,Evaluation Set,Avg Latency/Contract,Cost/Contract
+BASELINE,0.357,0.248,0.904,Full test split (true prevalence),<1s,$0 (local)
+EMBED,0.187,0.107,0.907,Full test split (true prevalence),~5s (CPU encode),$0 (local)
+LLM,0.690,0.812,0.613,Balanced sample (precision not comparable),~2-4s/paragraph,$0 (OpenRouter :free tier)
+HYBRID,0.831,0.933,0.787,Balanced sample (precision not comparable),~1-5s,$0 (baseline + budgeted :free LLM)

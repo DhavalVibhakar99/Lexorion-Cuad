@@ -9,6 +9,7 @@ Run:
     python -m src.models.baseline_detector
 """
 
+import os
 import time
 from pathlib import Path
 
@@ -24,6 +25,11 @@ CONFIG_DIR = Path("configs")
 PROCESSED_DIR = Path("data/processed")
 CHECKPOINT_DIR = Path("checkpoints")
 BASELINE_MODEL_PATH = CHECKPOINT_DIR / "baseline_tfidf_logreg.joblib"
+
+# Lexorion is a screening tool: missing a risky clause (false negative) is far
+# more costly than an extra flag a reviewer dismisses in seconds. Thresholds
+# are therefore tuned recall-first, not for max F1.
+RECALL_TARGET = float(os.getenv("LEXORION_RECALL_TARGET", "0.90"))
 
 
 def _label_columns(df: pd.DataFrame) -> list[str]:
@@ -43,6 +49,31 @@ def _best_threshold(y_true, y_score) -> tuple[float, float]:
             best_f1 = f1
 
     return best_threshold, best_f1
+
+
+def _recall_first_threshold(
+    y_true, y_score, recall_target: float = RECALL_TARGET
+) -> tuple[float, float, float]:
+    """
+    Choose the highest threshold whose validation recall still meets the
+    target (i.e. maximize precision subject to recall >= target). If no
+    threshold reaches the target, fall back to the one with the best recall.
+
+    Returns (threshold, recall_at_threshold, precision_at_threshold).
+    """
+    candidates = []
+    for threshold in [x / 100 for x in range(5, 91, 5)]:
+        y_pred = (y_score >= threshold).astype(int)
+        recall = recall_score(y_true, y_pred, zero_division=0)
+        precision = precision_score(y_true, y_pred, zero_division=0)
+        candidates.append((threshold, recall, precision))
+
+    meeting_target = [c for c in candidates if c[1] >= recall_target]
+    if meeting_target:
+        # Highest threshold that still meets the recall target.
+        return max(meeting_target, key=lambda c: c[0])
+    # Target unreachable: take the most recall we can get.
+    return max(candidates, key=lambda c: (c[1], c[0]))
 
 
 def train_baseline() -> pd.DataFrame:
@@ -109,9 +140,10 @@ def train_baseline() -> pd.DataFrame:
         model.fit(train_df["paragraph"], y_train)
         train_seconds = time.time() - start
 
+        val_y = val_df[label_col].astype(int).to_numpy()
         val_scores = model.predict_proba(val_df["paragraph"])[:, 1]
-        threshold, val_f1 = _best_threshold(
-            val_df[label_col].astype(int).to_numpy(), val_scores
+        threshold, val_recall, val_precision = _recall_first_threshold(
+            val_y, val_scores
         )
         trained_models[category] = model
         thresholds[category] = threshold
@@ -123,7 +155,11 @@ def train_baseline() -> pd.DataFrame:
         recall = recall_score(y_test, y_pred, zero_division=0)
         f1 = f1_score(y_test, y_pred, zero_division=0)
 
-        print(f"  Threshold: {threshold:.2f} (val F1={val_f1:.3f})")
+        print(
+            f"  Threshold: {threshold:.2f} "
+            f"(val recall={val_recall:.3f}, val precision={val_precision:.3f}, "
+            f"target recall>={RECALL_TARGET})"
+        )
         print(f"  Precision: {precision:.3f}")
         print(f"  Recall:    {recall:.3f}")
         print(f"  F1:        {f1:.3f}")
@@ -136,7 +172,9 @@ def train_baseline() -> pd.DataFrame:
                 "recall": recall,
                 "f1": f1,
                 "threshold": threshold,
-                "val_f1": val_f1,
+                "recall_target": RECALL_TARGET,
+                "val_recall": val_recall,
+                "val_precision": val_precision,
                 "train_positive": positives,
                 "test_positive": int(y_test.sum()),
                 "train_seconds": round(train_seconds, 2),
@@ -171,6 +209,7 @@ def train_baseline() -> pd.DataFrame:
         "model_name": "tfidf_logistic_regression",
         "models": trained_models,
         "thresholds": thresholds,
+        "threshold_policy": f"recall_first>={RECALL_TARGET}",
         "label_columns": label_cols,
         "summary": summary_rows,
     }

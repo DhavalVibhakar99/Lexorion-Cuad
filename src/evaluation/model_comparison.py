@@ -39,6 +39,16 @@ def load_baseline_predictions() -> pd.DataFrame:
     return pd.DataFrame()
 
 
+def load_embed_predictions() -> pd.DataFrame:
+    """Load MiniLM embedding detector predictions."""
+    pred_file = PROCESSED_DIR / "embed_predictions.parquet"
+    if pred_file.exists():
+        return pd.read_parquet(pred_file)
+
+    print("No embed predictions found. Run embed_detector.py first.")
+    return pd.DataFrame()
+
+
 def load_llm_predictions() -> pd.DataFrame:
     """Load LLM predictions from saved inference results."""
     pred_file = PROCESSED_DIR / "llm_predictions.parquet"
@@ -77,6 +87,14 @@ def compare_models():
         print_evaluation_report(baseline_metrics)
         results["baseline"] = baseline_metrics
     
+    # === Embedding model (frozen MiniLM + LogReg) ===
+    embed_df = load_embed_predictions()
+    if not embed_df.empty:
+        print("\n--- Embed (MiniLM) Results ---")
+        embed_metrics = evaluate_predictions(embed_df, "risk_category")
+        print_evaluation_report(embed_metrics)
+        results["embed"] = embed_metrics
+
     # === DeBERTa ===
     deberta_df = load_deberta_predictions()
     if not deberta_df.empty:
@@ -107,18 +125,30 @@ def compare_models():
         print("SUMMARY COMPARISON")
         print("=" * 70)
         
+        # Full-split rows are measured at true prevalence (~2% positives);
+        # LLM/hybrid rows come from the category-balanced eval sample. The two
+        # are not comparable on precision/F1, so every row is labeled.
+        eval_sets = {
+            "baseline": "Full test split (true prevalence)",
+            "embed": "Full test split (true prevalence)",
+            "deberta": "Full test split (true prevalence)",
+            "llm": "Balanced sample (precision not comparable)",
+            "hybrid": "Balanced sample (precision not comparable)",
+        }
+
         summary_rows = []
         for approach, metrics_df in results.items():
             aggregate = metrics_df[metrics_df["category"] == "AGGREGATE (macro)"].iloc[0]
-            
+
             # Load cost/latency metadata
             meta = _load_approach_metadata(approach)
-            
+
             summary_rows.append({
                 "Approach": approach.upper(),
                 "Macro F1": f"{aggregate['f1']:.3f}",
                 "Macro Precision": f"{aggregate['precision']:.3f}",
                 "Macro Recall": f"{aggregate['recall']:.3f}",
+                "Evaluation Set": eval_sets.get(approach, "N/A"),
                 "Avg Latency/Contract": meta.get("avg_latency", "N/A"),
                 "Cost/Contract": meta.get("cost_per_contract", "N/A"),
             })
@@ -147,12 +177,15 @@ def _load_approach_metadata(approach: str) -> dict:
     elif approach == "baseline":
         meta["avg_latency"] = "<1s"
         meta["cost_per_contract"] = "$0 (local)"
+    elif approach == "embed":
+        meta["avg_latency"] = "~5s (CPU encode)"
+        meta["cost_per_contract"] = "$0 (local)"
     elif approach == "llm":
-        meta["avg_latency"] = "~30s"
-        meta["cost_per_contract"] = "~$0.02"
+        meta["avg_latency"] = "~2-4s/paragraph"
+        meta["cost_per_contract"] = "$0 (OpenRouter :free tier)"
     elif approach == "hybrid":
-        meta["avg_latency"] = "~10s"
-        meta["cost_per_contract"] = "~$0.005"
+        meta["avg_latency"] = "~1-5s"
+        meta["cost_per_contract"] = "$0 (baseline + budgeted :free LLM)"
     
     return meta
 
