@@ -6,6 +6,7 @@ Run: streamlit run src/dashboard/app.py
 """
 
 import json
+import os
 import sys
 import yaml
 import pandas as pd
@@ -18,6 +19,31 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
+
+def llm_layer_available() -> bool:
+    """Resolve the OpenRouter key from env/.env or Streamlit secrets."""
+    if os.getenv("OPENROUTER_API_KEY"):
+        return True
+    try:
+        secrets_key = st.secrets["OPENROUTER_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        return False
+    if not secrets_key:
+        return False
+    os.environ["OPENROUTER_API_KEY"] = str(secrets_key)
+    try:
+        os.environ.setdefault("OPENROUTER_MODEL", str(st.secrets["OPENROUTER_MODEL"]))
+    except (KeyError, FileNotFoundError):
+        pass
+    return True
 
 CONFIG_DIR = Path("configs")
 PROCESSED_DIR = Path("data/processed")
@@ -63,13 +89,14 @@ page = st.sidebar.radio(
     label_visibility="collapsed",
 )
 
+_llm_ready = llm_layer_available()
 st.sidebar.markdown(
-    """
+    f"""
     <div class="lex-sidebar-panel">
         <div class="lex-sidebar-panel-title">System Status</div>
         <div class="lex-status-line"><span>Baseline</span><strong>Live</strong></div>
-        <div class="lex-status-line"><span>LLM Layer</span><strong>OpenRouter</strong></div>
-        <div class="lex-status-line"><span>Transformer</span><strong>Pending</strong></div>
+        <div class="lex-status-line"><span>LLM Layer</span><strong>{"Live" if _llm_ready else "Key needed"}</strong></div>
+        <div class="lex-status-line"><span>Routing</span><strong>Hybrid</strong></div>
     </div>
     <div class="lex-sidebar-panel">
         <div class="lex-sidebar-panel-title">Review Taxonomy</div>
@@ -231,6 +258,33 @@ def render_analysis_results(profile: dict):
     )
     col4.metric("Processing Time", f"{profile.get('processing_time_seconds', 0):.1f}s")
 
+    llm_stats = profile.get("llm_stats")
+    routing = profile.get("routing_summary")
+    if llm_stats and routing:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Uncertain Calls", routing.get("uncertain", 0))
+        col2.metric("Escalated to LLM", llm_stats.get("escalated", 0))
+        col3.metric(
+            "LLM Verdicts",
+            f"{llm_stats.get('confirmed_by_llm', 0)} risk / "
+            f"{llm_stats.get('cleared_by_llm', 0)} clear",
+        )
+        col4.metric("Est. LLM Cost", f"${llm_stats.get('estimated_cost_usd', 0):.4f}")
+        notes = []
+        if llm_stats.get("llm_model"):
+            notes.append(f"LLM: {llm_stats['llm_model']}")
+        if llm_stats.get("cache_hits"):
+            notes.append(f"{llm_stats['cache_hits']} served from cache")
+        if llm_stats.get("fallbacks"):
+            notes.append(
+                f"{llm_stats['fallbacks']} uncertain call(s) used the baseline "
+                "verdict (budget reached or LLM unavailable)"
+            )
+        if llm_stats.get("unavailable_reason"):
+            notes.append(f"LLM unavailable: {llm_stats['unavailable_reason']}")
+        if notes:
+            st.caption(" · ".join(notes))
+
     st.plotly_chart(
         render_risk_heatmap(profile.get("risk_scores", {})),
         width="stretch",
@@ -239,12 +293,19 @@ def render_analysis_results(profile: dict):
     detections = profile.get("detections", [])
     if detections:
         st.subheader("Review Queue")
+        model_badges = {
+            "llm": "LLM verified",
+            "baseline": "Baseline",
+            "baseline_fallback": "Baseline (fallback)",
+            "tfidf_logistic_regression": "Baseline",
+        }
         for d in detections:
             risk_level = d.get("risk_level", "none")
             label = "Priority" if risk_level in ["high", "critical"] else "Review"
+            badge = model_badges.get(d.get("model_used", ""), d.get("model_used", ""))
             with st.expander(
                 f"{label}: {d.get('risk_category', '').replace('_', ' ').title()} "
-                f"(confidence: {d.get('confidence', 0):.0%})"
+                f"(confidence: {d.get('confidence', 0):.0%} · {badge})"
             ):
                 st.markdown(f"**Risk Level:** {risk_level}")
                 st.markdown(f"**Summary:** {d.get('summary', '')}")
@@ -289,13 +350,19 @@ def render_page_header(title: str, subtitle: str, status: str = "Portfolio build
     )
 
 
-def render_signal_strip(baseline_ready: bool):
+def render_signal_strip(baseline_ready: bool, llm_ready: bool = False):
     """Render product-level operating signals for the review console."""
     baseline_value = "Live scoring" if baseline_ready else "Training needed"
     baseline_note = (
         "Saved TF-IDF model artifact is loaded"
         if baseline_ready
         else "Run baseline training to enable live predictions"
+    )
+    llm_value = "Live via OpenRouter" if llm_ready else "Key needed"
+    llm_note = (
+        "Uncertain clauses get an LLM second opinion"
+        if llm_ready
+        else "Set OPENROUTER_API_KEY to enable escalation"
     )
     st.markdown(
         f"""
@@ -312,8 +379,8 @@ def render_signal_strip(baseline_ready: bool):
             </div>
             <div class="lex-signal">
                 <div class="lex-signal-label">LLM Routing</div>
-                <div class="lex-signal-value">OpenRouter ready</div>
-                <div class="lex-signal-note">For uncertain or high-value clauses</div>
+                <div class="lex-signal-value">{llm_value}</div>
+                <div class="lex-signal-note">{llm_note}</div>
             </div>
             <div class="lex-signal">
                 <div class="lex-signal-label">Audit Layer</div>
@@ -335,7 +402,31 @@ if page == "Review Console":
         "A contract review workspace that scores clause exposure, queues risky language, and prepares uncertain findings for LLM review.",
         "Live baseline" if baseline_ready else "Demo environment",
     )
-    render_signal_strip(baseline_ready)
+    render_signal_strip(baseline_ready, _llm_ready)
+
+    with st.expander("Analysis settings", expanded=False):
+        use_llm = st.toggle(
+            "LLM triage of weak flags",
+            value=_llm_ready,
+            disabled=not _llm_ready,
+            help=(
+                "The baseline is tuned recall-first, so it over-flags by design. "
+                "Weak flags (just above the decision threshold) are escalated to "
+                "the OpenRouter LLM, which confirms real risks with a plain-"
+                "English summary or clears false alarms. Strong flags stay local."
+                if _llm_ready
+                else "Set OPENROUTER_API_KEY in .env or Streamlit secrets to enable."
+            ),
+        )
+        llm_budget = st.slider(
+            "LLM call budget per analysis",
+            min_value=5,
+            max_value=60,
+            value=20,
+            step=5,
+            disabled=not _llm_ready,
+            help="Hard cap on API calls. Leftover uncertain clauses fall back to the baseline verdict.",
+        )
 
     # Input method
     st.markdown(
@@ -373,7 +464,31 @@ if page == "Review Console":
             if uploaded_file.type == "text/plain":
                 contract_text = uploaded_file.read().decode("utf-8")
             else:
-                st.warning("PDF parsing coming soon. For now, paste the text directly.")
+                try:
+                    from pypdf import PdfReader
+
+                    reader = PdfReader(uploaded_file)
+                    contract_text = "\n\n".join(
+                        (page.extract_text() or "") for page in reader.pages
+                    ).strip()
+                    if contract_text:
+                        st.caption(
+                            f"Extracted text from {len(reader.pages)} page(s): "
+                            f"{uploaded_file.name}"
+                        )
+                        st.text_area(
+                            "Extracted contract text",
+                            value=contract_text,
+                            height=240,
+                            disabled=True,
+                        )
+                    else:
+                        st.warning(
+                            "No extractable text found — this PDF may be a scan. "
+                            "OCR is not supported yet; paste the text instead."
+                        )
+                except Exception as exc:
+                    st.error(f"Could not read PDF: {exc}")
 
     if contract_text and st.button("Analyze Contract", type="primary"):
         with st.spinner("Reviewing clauses and scoring risk exposure..."):
@@ -385,6 +500,7 @@ if page == "Review Console":
             try:
                 from src.data_pipeline.chunk_contracts import split_into_paragraphs
                 from src.models.baseline_detector import analyze_contract_with_baseline
+                from src.models.hybrid_pipeline import analyze_contract_hybrid
 
                 paragraphs = split_into_paragraphs(contract_text)
 
@@ -393,12 +509,19 @@ if page == "Review Console":
                         "No analyzable paragraphs found. Ensure the text is long enough."
                     )
                 else:
-                    profile = analyze_contract_with_baseline(
-                        paragraphs,
-                        contract_id=(
-                            "demo" if input_method == "Demo contract" else "uploaded"
-                        ),
+                    contract_id = (
+                        "demo" if input_method == "Demo contract" else "uploaded"
                     )
+                    if use_llm:
+                        profile = analyze_contract_hybrid(
+                            paragraphs,
+                            contract_id=contract_id,
+                            llm_max_calls=llm_budget,
+                        )
+                    else:
+                        profile = analyze_contract_with_baseline(
+                            paragraphs, contract_id=contract_id
+                        )
                     render_analysis_results(profile)
 
             except FileNotFoundError:
@@ -435,8 +558,8 @@ if page == "Review Console":
 elif page == "Model Performance":
     render_page_header(
         "Model Performance",
-        "Track model quality across the baseline, DeBERTa, LLM-only, and hybrid approaches.",
-        "Baseline measured",
+        "Recall-first screening benchmark: TF-IDF baseline, MiniLM embeddings, OpenRouter LLM, and the hybrid router on the CUAD test split.",
+        "Measured results",
     )
 
     comparison = load_comparison_results()
@@ -446,6 +569,13 @@ elif page == "Model Performance":
         # Summary table
         st.subheader("Overall Benchmark")
         st.dataframe(comparison, width="stretch", hide_index=True)
+        st.caption(
+            "Local models are thresholded recall-first (target ≥0.90): a "
+            "screening tool pays more for a missed clause than a false alarm. "
+            "Check the Evaluation Set column before comparing rows — "
+            "balanced-sample precision (LLM, hybrid) is not comparable to "
+            "true-prevalence precision (baseline, embed). Recall always is."
+        )
 
         # Per-category comparison
         if detailed is not None:
@@ -491,39 +621,6 @@ elif page == "Model Performance":
             "python -m src.evaluation.model_comparison\n"
             "```"
         )
-
-        # Show placeholder chart
-        st.subheader("Expected Output")
-        placeholder_data = pd.DataFrame(
-            {
-                "Category": ["Liability", "IP Risk", "Termination", "Indemnification"]
-                * 3,
-                "Approach": ["DeBERTa"] * 4 + ["LLM"] * 4 + ["Hybrid"] * 4,
-                "F1": [
-                    0.72,
-                    0.58,
-                    0.65,
-                    0.70,
-                    0.68,
-                    0.75,
-                    0.71,
-                    0.78,
-                    0.74,
-                    0.73,
-                    0.70,
-                    0.77,
-                ],
-            }
-        )
-        fig = px.bar(
-            placeholder_data,
-            x="Category",
-            y="F1",
-            color="Approach",
-            barmode="group",
-            title="Sample Comparison",
-        )
-        st.plotly_chart(fig, width="stretch")
 
 
 elif page == "Error Analysis":

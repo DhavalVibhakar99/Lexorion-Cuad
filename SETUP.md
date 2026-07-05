@@ -89,12 +89,21 @@ python --version
 
 ## Step 5: Install dependencies
 
+For the full development environment (training, notebooks, evaluation):
+
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 This takes 3-5 minutes (PyTorch is ~2GB). If you see any red errors, share them
 in our group chat before trying to fix them yourself.
+
+If you only want to run the dashboard, the slim runtime set is enough
+(it's also what Streamlit Cloud installs when deploying):
+
+```bash
+pip install -r requirements.txt
+```
 
 Verify key packages:
 

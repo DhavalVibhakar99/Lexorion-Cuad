@@ -170,6 +170,11 @@ Respond in this exact JSON format (no other text):
     return prompt
 
 
+def openrouter_available() -> bool:
+    """Whether the OpenRouter LLM layer can be used right now."""
+    return OpenAI is not None and bool(os.getenv("OPENROUTER_API_KEY"))
+
+
 class LLMClassifier:
     """LLM-based clause classifier with caching and cost tracking."""
 
@@ -393,8 +398,11 @@ class LLMClassifier:
                 "confidence": 0.0,
             }
 
-        # Cache result
-        self._save_cache(cache_key, result)
+        # Cache result. ERROR results (API failures, rate limits, parse
+        # failures) must not be cached, or a transient failure would be
+        # replayed forever for this paragraph.
+        if result.get("classification") != "ERROR":
+            self._save_cache(cache_key, result)
 
         return result
 
@@ -513,8 +521,14 @@ def evaluate_llm_approach(
 
         results = classifier.classify_batch(sample["paragraph"].tolist(), category)
 
+        skipped_errors = 0
         for idx, (_, row) in enumerate(sample.iterrows()):
             result = results[idx]
+            # ERROR results (budget exhausted, API failure, invalid JSON) are
+            # not predictions — scoring them as y_pred=0 would corrupt metrics.
+            if result.get("classification") == "ERROR":
+                skipped_errors += 1
+                continue
             all_predictions.append(
                 {
                     "paragraph_id": row["paragraph_id"],
@@ -529,6 +543,8 @@ def evaluate_llm_approach(
                     "guardrail_blocked": result.get("guardrail_blocked", False),
                 }
             )
+        if skipped_errors:
+            print(f"  Skipped {skipped_errors} ERROR results (not scored).")
 
     # Save predictions
     pred_df = pd.DataFrame(all_predictions)

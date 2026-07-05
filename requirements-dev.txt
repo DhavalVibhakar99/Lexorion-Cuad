@@ -1,0 +1,30 @@
+# Full development environment: training, evaluation, notebooks, tooling.
+# Includes everything the deployed dashboard uses plus the heavy ML stack.
+
+-r requirements.txt
+
+# Transformer training (DeBERTa milestone)
+torch>=2.0.0
+transformers>=4.35.0
+datasets>=2.14.0
+accelerate>=0.24.0
+tokenizers>=0.14.0
+
+# NLP utilities
+spacy>=3.6.0
+nltk>=3.8.0
+sentence-transformers>=2.5.0
+
+# LLM APIs (OpenAI/OpenRouter client comes from requirements.txt)
+anthropic>=0.25.0
+
+# Evaluation / plotting
+seaborn>=0.12.0
+matplotlib>=3.7.0
+
+# Dev tooling
+pytest>=7.4.0
+black>=23.7.0
+ruff>=0.1.0
+jupyter>=1.0.0
+notebook>=7.0.0

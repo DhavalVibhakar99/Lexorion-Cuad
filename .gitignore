@@ -13,9 +13,10 @@ venv/
 .venv/
 env/
 
-# Local environment variables and secrets
-.env
-.env.*
+# Local environment variables and secrets (broad glob catches stray copies)
+.env*
+!.env.example
+.streamlit/secrets.toml
 
 # Jupyter
 .ipynb_checkpoints/
@@ -27,7 +28,9 @@ env/
 data/raw/
 data/processed/
 data/evaluation/
-checkpoints/
+# Keep the small baseline artifact so the deployed dashboard can score live
+checkpoints/*
+!checkpoints/baseline_tfidf_logreg.joblib
 
 # LLM/API caches
 llm_cache/
@@ -35,3 +38,6 @@ data/processed/llm_cache/
 
 # Logs
 *.log
+
+# Local agent tooling
+.claude/

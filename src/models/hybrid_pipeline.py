@@ -17,8 +17,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-from src.models.clause_detector import predict as deberta_predict
 from src.models.llm_classifier import LLMClassifier
+
+# NOTE: clause_detector (DeBERTa) pulls in torch/transformers, which are not
+# installed in the slim deployment. It is imported lazily inside
+# HybridPipeline.analyze_paragraph so that analyze_contract_hybrid — the
+# baseline+LLM path used by the dashboard — works without them.
 
 
 CONFIG_DIR = Path("configs")
@@ -157,6 +161,8 @@ class HybridPipeline:
             if route == "local":
                 # Stage 1: DeBERTa
                 try:
+                    from src.models.clause_detector import predict as deberta_predict
+
                     preds = deberta_predict(category, [paragraph])
                     pred = preds[0]
                     
@@ -274,6 +280,177 @@ class HybridPipeline:
             profile.total_cost_usd = cost["estimated_cost_usd"]
         
         return profile
+
+
+def analyze_contract_hybrid(
+    paragraphs: List[str],
+    contract_id: str = "uploaded",
+    provider: str = "openrouter",
+    llm_model: Optional[str] = None,
+    llm_max_calls: int = 20,
+    uncertainty_margin: float = 0.15,
+    max_detections: int = 30,
+) -> dict:
+    """
+    Production hybrid path used by the dashboard: TF-IDF baseline scores every
+    paragraph x category pair, and only the calls near the tuned decision
+    boundary are escalated to the LLM for a second opinion.
+
+    The baseline is thresholded recall-first (it over-flags by design, like an
+    AML monitoring screen), so the LLM's job here is precision repair: it
+    triages the weak flags. Routing per (paragraph, category), where t is the
+    category's tuned threshold and m the margin:
+      score >= t + m  -> strong flag, kept as baseline detection (free)
+      t <= score < t+m -> weak flag, escalated to the LLM to confirm or clear
+      score < t        -> negative, skipped (free)
+
+    Escalations are processed highest-score first so the most likely risks get
+    the call budget. If the LLM is unavailable or the budget runs out, weak
+    flags are kept (recall is never sacrificed to a missing API key).
+    """
+    from src.models.baseline_detector import (
+        _category_display_names,
+        _risk_level,
+        load_baseline_model,
+    )
+
+    artifact = load_baseline_model()
+    models = artifact["models"]
+    thresholds = artifact["thresholds"]
+    display_names = _category_display_names()
+
+    start = time.time()
+
+    # One vectorized predict_proba per category instead of per paragraph.
+    scores = {
+        category: model.predict_proba(paragraphs)[:, 1]
+        for category, model in models.items()
+    }
+
+    confident = []
+    uncertain = []
+    for category in models:
+        threshold = float(thresholds.get(category, 0.5))
+        for idx in range(len(paragraphs)):
+            score = float(scores[category][idx])
+            if score >= threshold + uncertainty_margin:
+                confident.append((idx, category, score, threshold))
+            elif score >= threshold:
+                uncertain.append((idx, category, score, threshold))
+
+    def _display(category: str) -> str:
+        return display_names.get(category, category.replace("_", " ").title())
+
+    def _baseline_detection(idx, category, score, threshold, model_used, note=""):
+        return {
+            "paragraph_id": f"{contract_id}_p{idx:04d}",
+            "risk_category": category,
+            "is_present": True,
+            "confidence": score,
+            "risk_level": _risk_level(score),
+            "summary": note
+            or (
+                f"Baseline model flagged this paragraph as {_display(category)} "
+                f"with {score:.0%} confidence."
+            ),
+            "extracted_clause": paragraphs[idx],
+            "model_used": model_used,
+            "threshold": threshold,
+        }
+
+    detections = [
+        _baseline_detection(idx, category, score, threshold, "baseline")
+        for idx, category, score, threshold in confident
+    ]
+
+    llm_stats = {
+        "escalated": 0,
+        "confirmed_by_llm": 0,
+        "cleared_by_llm": 0,
+        "fallbacks": 0,
+        "api_calls": 0,
+        "cache_hits": 0,
+        "estimated_cost_usd": 0.0,
+        "llm_model": None,
+        "unavailable_reason": None,
+    }
+
+    llm = None
+    if uncertain:
+        # Most likely risks first, so they get the call budget.
+        uncertain.sort(key=lambda item: item[2], reverse=True)
+        try:
+            llm = LLMClassifier(
+                provider=provider, model=llm_model, max_calls=llm_max_calls
+            )
+            llm_stats["llm_model"] = llm.model
+        except (ImportError, ValueError) as exc:
+            llm_stats["unavailable_reason"] = str(exc)
+
+    for idx, category, score, threshold in uncertain:
+        result = llm.classify_paragraph(paragraphs[idx], category) if llm else None
+
+        if result is not None and result.get("classification") == "PRESENT":
+            llm_stats["escalated"] += 1
+            llm_stats["confirmed_by_llm"] += 1
+            detections.append(
+                {
+                    "paragraph_id": f"{contract_id}_p{idx:04d}",
+                    "risk_category": category,
+                    "is_present": True,
+                    "confidence": float(result.get("confidence", score)),
+                    "risk_level": result.get("risk_level", _risk_level(score)),
+                    "summary": result.get("summary", ""),
+                    "extracted_clause": result.get("extracted_clause")
+                    or paragraphs[idx],
+                    "model_used": "llm",
+                    "threshold": threshold,
+                }
+            )
+        elif result is not None and result.get("classification") == "ABSENT":
+            llm_stats["escalated"] += 1
+            llm_stats["cleared_by_llm"] += 1
+        else:
+            # LLM unavailable, out of budget, or errored: keep the weak flag.
+            # Recall is never sacrificed to a missing API key or rate limit.
+            llm_stats["fallbacks"] += 1
+            detections.append(
+                _baseline_detection(idx, category, score, threshold, "baseline_fallback")
+            )
+
+    if llm is not None:
+        cost = llm.get_cost_estimate()
+        llm_stats["api_calls"] = cost["total_calls"]
+        llm_stats["cache_hits"] = cost["cache_hits"]
+        llm_stats["estimated_cost_usd"] = cost["estimated_cost_usd"]
+
+    risk_scores = {category: 0.0 for category in models}
+    for detection in detections:
+        category = detection["risk_category"]
+        risk_scores[category] = max(risk_scores[category], detection["confidence"])
+
+    detections = sorted(detections, key=lambda item: item["confidence"], reverse=True)
+    flagged_paragraphs = len({item["paragraph_id"] for item in detections})
+
+    return {
+        "contract_id": contract_id,
+        "pipeline": "hybrid" if llm is not None else "baseline_only",
+        "total_paragraphs": len(paragraphs),
+        "flagged_paragraphs": flagged_paragraphs,
+        "risk_scores": {key: round(value, 3) for key, value in risk_scores.items()},
+        "processing_time_seconds": round(time.time() - start, 2),
+        "total_cost_usd": llm_stats["estimated_cost_usd"],
+        "detections": detections[:max_detections],
+        "llm_stats": llm_stats,
+        "routing_summary": {
+            "confident_positive": len(confident),
+            "uncertain": len(uncertain),
+            "confident_negative": len(paragraphs) * len(models)
+            - len(confident)
+            - len(uncertain),
+            "uncertainty_margin": uncertainty_margin,
+        },
+    }
 
 
 def print_risk_profile(profile: ContractRiskProfile):
