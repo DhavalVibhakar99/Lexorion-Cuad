@@ -130,6 +130,9 @@ def train_multilabel(
         num_labels=len(label_cols),
         problem_type="multi_label_classification",
         ignore_mismatched_sizes=True,  # fresh classification head either way
+        # Keep master weights fp32: AMP (fp16=True) scales grads and cannot
+        # unscale fp16 params — transformers 5.x otherwise casts the model.
+        torch_dtype=torch.float32,
     )
 
     # pos_weight = negatives/positives per class, capped to avoid instability.
