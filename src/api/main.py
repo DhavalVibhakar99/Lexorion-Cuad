@@ -85,8 +85,8 @@ code{background:#1c1a15;border:1px solid #2c2920;border-radius:6px;padding:2px 8
 <p>Contract risk screening: a recall-first local model scores every paragraph
 across 8 business risk categories; weak flags are triaged by an LLM.</p>
 <p><code>POST /analyze</code> &nbsp; <code>POST /analyze-pdf</code> &nbsp; <code>GET /health</code></p>
-<p><a href="/docs">Interactive API docs</a> |
-<a href="https://github.com/sahilshinde-45/Lexorion">GitHub</a></p>
+<p><a href="/docs" target="_blank" rel="noopener">Interactive API docs</a> |
+<a href="https://github.com/sahilshinde-45/Lexorion" target="_blank" rel="noopener">GitHub</a></p>
 </main></body></html>"""
     )
 
