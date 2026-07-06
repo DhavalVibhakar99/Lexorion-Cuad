@@ -312,6 +312,7 @@ def analyze_contract_hybrid(
         _category_display_names,
         _risk_level,
         load_baseline_model,
+        top_evidence_terms,
     )
 
     artifact = load_baseline_model()
@@ -354,6 +355,7 @@ def analyze_contract_hybrid(
                 f"with {score:.0%} confidence."
             ),
             "extracted_clause": paragraphs[idx],
+            "evidence_terms": top_evidence_terms(models[category], paragraphs[idx]),
             "model_used": model_used,
             "threshold": threshold,
         }
@@ -403,6 +405,7 @@ def analyze_contract_hybrid(
                     "summary": result.get("summary", ""),
                     "extracted_clause": result.get("extracted_clause")
                     or paragraphs[idx],
+                    "paragraph_text": paragraphs[idx],
                     "model_used": "llm",
                     "threshold": threshold,
                 }

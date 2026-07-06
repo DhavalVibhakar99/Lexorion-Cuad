@@ -424,3 +424,102 @@ textarea:focus,
     .lex-signal-grid { grid-template-columns: 1fr; }
     .lex-header-mark { width: 42px; height: 42px; font-size: 0.875rem; }
 }
+
+/* === Explanatory layer === */
+.lex-verdict {
+    background: linear-gradient(135deg, rgba(212,149,42,0.12), rgba(28,26,21,0.6));
+    border: 1px solid rgba(212,149,42,0.35);
+    border-left: 3px solid #d4952a;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 4px 0 14px 0;
+    color: #e8e3d8;
+    font-size: 1.02rem;
+}
+
+.lex-stage-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 14px 0;
+}
+.lex-stage {
+    background: rgba(28,26,21,0.7);
+    border: 1px solid #2c2920;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+.lex-stage-step {
+    color: #d4952a;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.lex-stage-value {
+    color: #e8e3d8;
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-bottom: 4px;
+}
+.lex-stage-note {
+    color: #7a7168;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.lex-chip {
+    display: inline-block;
+    background: rgba(212,149,42,0.14);
+    border: 1px solid rgba(212,149,42,0.4);
+    color: #e0b264;
+    border-radius: 999px;
+    padding: 2px 10px;
+    margin: 2px 6px 2px 0;
+    font-size: 0.8rem;
+    font-family: ui-monospace, monospace;
+}
+.lex-evidence-label {
+    color: #7a7168;
+    font-size: 0.82rem;
+    margin: 8px 0 4px 0;
+}
+
+.lex-why {
+    background: rgba(28,26,21,0.7);
+    border-left: 3px solid #7ec8e3;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    color: #a89f92;
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+.lex-severity {
+    display: inline-block;
+    margin-left: 8px;
+    color: #7a7168;
+    font-size: 0.75rem;
+    border: 1px solid #2c2920;
+    border-radius: 999px;
+    padding: 1px 8px;
+}
+
+.lex-clause-context {
+    background: #14120e;
+    border: 1px solid #2c2920;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 8px;
+    color: #a89f92;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    font-family: ui-monospace, monospace;
+    white-space: pre-wrap;
+}
+.lex-clause-context mark {
+    background: rgba(229,83,75,0.25);
+    color: #ffb4ae;
+    border-radius: 3px;
+    padding: 0 2px;
+}

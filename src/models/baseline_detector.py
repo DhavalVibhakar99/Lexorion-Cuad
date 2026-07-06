@@ -249,6 +249,29 @@ def _category_display_names() -> dict[str, str]:
     }
 
 
+def top_evidence_terms(model, paragraph: str, top_k: int = 5) -> list[str]:
+    """
+    The TF-IDF n-grams in this paragraph that pushed the verdict toward
+    'risky', ranked by contribution (tfidf value x logistic coefficient).
+    This is the model's actual reasoning, not a post-hoc guess.
+    """
+    try:
+        tfidf = model.named_steps["tfidf"]
+        clf = model.named_steps["clf"]
+        vec = tfidf.transform([paragraph])
+        contributions = vec.multiply(clf.coef_[0]).tocoo()
+        names = tfidf.get_feature_names_out()
+        positive = [
+            (names[j], value)
+            for j, value in zip(contributions.col, contributions.data)
+            if value > 0
+        ]
+        positive.sort(key=lambda item: -item[1])
+        return [term for term, _ in positive[:top_k]]
+    except Exception:
+        return []
+
+
 def _risk_level(score: float) -> str:
     if score >= 0.85:
         return "high"
@@ -302,6 +325,7 @@ def analyze_contract_with_baseline(
                         f"with {score:.0%} confidence."
                     ),
                     "extracted_clause": paragraph,
+                    "evidence_terms": top_evidence_terms(model, paragraph),
                     "model_used": artifact.get("model_name", "baseline"),
                     "threshold": threshold,
                 }

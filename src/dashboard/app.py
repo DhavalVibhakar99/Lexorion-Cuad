@@ -5,6 +5,7 @@ This is the portfolio-facing interface hiring managers see.
 Run: streamlit run src/dashboard/app.py
 """
 
+import html as html_lib
 import json
 import os
 import sys
@@ -247,8 +248,120 @@ def render_risk_heatmap(risk_scores: dict):
     return fig
 
 
+CATEGORY_STAKES = {
+    "liability_risk": "One clause decided the CrowdStrike-Delta fight: a ~$500M loss against a liability cap of single-digit millions.",
+    "ip_risk": "Broad IP assignment or license grants can quietly transfer ownership of everything built under the contract.",
+    "termination_risk": "Termination-for-convenience lets a counterparty walk away — revenue you planned on can vanish with 30 days' notice.",
+    "indemnification": "Determines who pays when things go wrong; one-way indemnification shifts the entire downside to you.",
+    "exclusivity": "Non-competes and exclusivity lock you out of markets long after the deal stops making sense.",
+    "change_of_control": "When Broadcom bought VMware, renewal rights evaporated and costs jumped ~1,050% for some customers — these clauses decide what an acquisition does to your deals.",
+    "revenue_risk": "Minimum commitments and uncapped price escalators compound silently: a 7% uncapped escalator turns $50K/yr into ~$370K over five years.",
+    "renewal_expiration": "Auto-renewal with a missed notice window locks you into another full term at the vendor's price.",
+}
+
+
+def category_info() -> dict:
+    """Description + severity per category from the mapping config."""
+    config = load_category_mapping() or {}
+    return {
+        key: {
+            "display": value.get("display_name", key.replace("_", " ").title()),
+            "description": value.get("description", ""),
+            "severity": value.get("severity_weight", 0.5),
+        }
+        for key, value in config.get("risk_categories", {}).items()
+    }
+
+
+def render_verdict(profile: dict):
+    """One-sentence narrative verdict, so the reader knows what the numbers say."""
+    info = category_info()
+    scores = profile.get("risk_scores", {})
+    elevated = sorted(
+        ((c, s) for c, s in scores.items() if s >= 0.5),
+        key=lambda item: -item[1],
+    )
+    flagged = profile.get("flagged_paragraphs", 0)
+    if not elevated:
+        text = (
+            "No elevated risk categories. "
+            f"{flagged} paragraph(s) carry weak flags worth a skim."
+            if flagged
+            else "No risk clauses detected in this contract."
+        )
+    else:
+        names = ", ".join(info.get(c, {}).get("display", c) for c, _ in elevated[:3])
+        text = (
+            f"Elevated exposure in {names}. "
+            f"{flagged} paragraph(s) queued for review below — start at the top."
+        )
+    st.markdown(
+        f'<div class="lex-verdict">{html_lib.escape(text)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_pipeline_strip(profile: dict):
+    """Show what the pipeline actually did to this contract, stage by stage."""
+    routing = profile.get("routing_summary")
+    llm_stats = profile.get("llm_stats") or {}
+    total = profile.get("total_paragraphs", 0)
+    if not routing:
+        return
+    decisions = (
+        routing["confident_positive"]
+        + routing["uncertain"]
+        + routing["confident_negative"]
+    )
+    stage2 = (
+        f"{llm_stats.get('confirmed_by_llm', 0)} confirmed · "
+        f"{llm_stats.get('cleared_by_llm', 0)} cleared as false alarms"
+        if llm_stats.get("escalated")
+        else (
+            "no weak flags to triage"
+            if routing["uncertain"] == 0
+            else f"{llm_stats.get('fallbacks', 0)} kept without LLM review"
+        )
+    )
+    st.markdown(
+        f"""
+        <div class="lex-stage-grid">
+            <div class="lex-stage">
+                <div class="lex-stage-step">1 · Screen (local, free)</div>
+                <div class="lex-stage-value">{decisions:,} decisions</div>
+                <div class="lex-stage-note">{total} paragraphs × 8 risk categories scored by the
+                recall-first baseline; {routing["confident_negative"]:,} cleared instantly</div>
+            </div>
+            <div class="lex-stage">
+                <div class="lex-stage-step">2 · Triage weak flags (LLM)</div>
+                <div class="lex-stage-value">{routing["uncertain"]} escalated</div>
+                <div class="lex-stage-note">{stage2}</div>
+            </div>
+            <div class="lex-stage">
+                <div class="lex-stage-step">3 · Human review queue</div>
+                <div class="lex-stage-value">{profile.get("flagged_paragraphs", 0)} paragraphs</div>
+                <div class="lex-stage-note">{routing["confident_positive"]} strong flags kept local ·
+                sorted by confidence, highest risk first</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _highlighted_clause(paragraph: str, clause: str) -> str:
+    """Paragraph HTML with the extracted clause marked, if it's a substring."""
+    para = html_lib.escape(paragraph)
+    needle = html_lib.escape(clause.strip())
+    if needle and needle in para:
+        return para.replace(needle, f"<mark>{needle}</mark>", 1)
+    return para
+
+
 def render_analysis_results(profile: dict):
     """Render a risk profile from either live pipeline output or demo JSON."""
+    render_verdict(profile)
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Paragraphs Analyzed", profile.get("total_paragraphs", 0))
     col2.metric("Clauses Flagged", profile.get("flagged_paragraphs", 0))
@@ -258,28 +371,17 @@ def render_analysis_results(profile: dict):
     )
     col4.metric("Processing Time", f"{profile.get('processing_time_seconds', 0):.1f}s")
 
+    render_pipeline_strip(profile)
+
     llm_stats = profile.get("llm_stats")
-    routing = profile.get("routing_summary")
-    if llm_stats and routing:
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Uncertain Calls", routing.get("uncertain", 0))
-        col2.metric("Escalated to LLM", llm_stats.get("escalated", 0))
-        col3.metric(
-            "LLM Verdicts",
-            f"{llm_stats.get('confirmed_by_llm', 0)} risk / "
-            f"{llm_stats.get('cleared_by_llm', 0)} clear",
-        )
-        col4.metric("Est. LLM Cost", f"${llm_stats.get('estimated_cost_usd', 0):.4f}")
+    if llm_stats:
         notes = []
         if llm_stats.get("llm_model"):
             notes.append(f"LLM: {llm_stats['llm_model']}")
+        if llm_stats.get("estimated_cost_usd") is not None:
+            notes.append(f"est. cost ${llm_stats['estimated_cost_usd']:.4f}")
         if llm_stats.get("cache_hits"):
             notes.append(f"{llm_stats['cache_hits']} served from cache")
-        if llm_stats.get("fallbacks"):
-            notes.append(
-                f"{llm_stats['fallbacks']} uncertain call(s) used the baseline "
-                "verdict (budget reached or LLM unavailable)"
-            )
         if llm_stats.get("unavailable_reason"):
             notes.append(f"LLM unavailable: {llm_stats['unavailable_reason']}")
         if notes:
@@ -291,27 +393,65 @@ def render_analysis_results(profile: dict):
     )
 
     detections = profile.get("detections", [])
+    info = category_info()
     if detections:
         st.subheader("Review Queue")
+        st.caption(
+            "Each card explains itself: what was found, the exact words that "
+            "triggered the model, and why this clause type costs money."
+        )
         model_badges = {
             "llm": "LLM verified",
-            "baseline": "Baseline",
-            "baseline_fallback": "Baseline (fallback)",
+            "baseline": "Baseline (strong signal)",
+            "baseline_fallback": "Baseline (unreviewed weak flag)",
             "tfidf_logistic_regression": "Baseline",
         }
         for d in detections:
+            category = d.get("risk_category", "")
+            cat = info.get(category, {})
             risk_level = d.get("risk_level", "none")
             label = "Priority" if risk_level in ["high", "critical"] else "Review"
             badge = model_badges.get(d.get("model_used", ""), d.get("model_used", ""))
             with st.expander(
-                f"{label}: {d.get('risk_category', '').replace('_', ' ').title()} "
+                f"{label}: {cat.get('display', category.replace('_', ' ').title())} "
                 f"(confidence: {d.get('confidence', 0):.0%} · {badge})"
             ):
-                st.markdown(f"**Risk Level:** {risk_level}")
-                st.markdown(f"**Summary:** {d.get('summary', '')}")
-                st.markdown(f"**Model:** {d.get('model_used', '')}")
-                if d.get("extracted_clause"):
-                    st.code(d["extracted_clause"], language=None)
+                st.markdown(f"**Finding:** {d.get('summary', '')}")
+
+                evidence = d.get("evidence_terms") or []
+                if evidence:
+                    chips = "".join(
+                        f'<span class="lex-chip">{html_lib.escape(t)}</span>'
+                        for t in evidence
+                    )
+                    st.markdown(
+                        '<div class="lex-evidence-label">Triggered by these phrases '
+                        f"(model's actual features):</div>{chips}",
+                        unsafe_allow_html=True,
+                    )
+
+                stakes = CATEGORY_STAKES.get(category)
+                why = cat.get("description", "")
+                if why or stakes:
+                    why_text = f"{why.rstrip('.')}." if why else ""
+                    st.markdown(
+                        f"""<div class="lex-why"><strong>Why this matters:</strong>
+                        {html_lib.escape(why_text)}{" " + html_lib.escape(stakes) if stakes else ""}
+                        <span class="lex-severity">severity weight {cat.get("severity", 0.5):.2f}</span></div>""",
+                        unsafe_allow_html=True,
+                    )
+
+                clause = d.get("extracted_clause", "")
+                paragraph_text = d.get("paragraph_text", "")
+                if paragraph_text and clause and clause.strip() in paragraph_text:
+                    st.markdown(
+                        '<div class="lex-clause-context">'
+                        + _highlighted_clause(paragraph_text, clause)
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
+                elif clause:
+                    st.code(clause, language=None)
     else:
         st.success("No significant risk clauses detected.")
 
@@ -537,22 +677,50 @@ if page == "Review Console":
                 st.error(f"Analysis failed: {e}")
 
     elif not contract_text:
-        # Show demo with sample data
-        st.info("Paste a contract above, or explore the model and error analysis tabs.")
-
-        # Show sample risk profile
-        st.subheader("Sample Exposure Profile")
-        sample_scores = {
-            "liability_risk": 0.82,
-            "ip_risk": 0.65,
-            "termination_risk": 0.45,
-            "indemnification": 0.71,
-            "exclusivity": 0.30,
-            "change_of_control": 0.15,
-            "revenue_risk": 0.55,
-            "renewal_expiration": 0.20,
-        }
-        st.plotly_chart(render_risk_heatmap(sample_scores), width="stretch")
+        st.markdown(
+            """
+            <div class="lex-stage-grid">
+                <div class="lex-stage">
+                    <div class="lex-stage-step">1 · Screen (local, free)</div>
+                    <div class="lex-stage-value">Every paragraph, 8 categories</div>
+                    <div class="lex-stage-note">A recall-first TF-IDF model reads the whole
+                    contract — tuned to catch ~9 in 10 risky clauses, over-flagging by design
+                    like an AML monitoring screen</div>
+                </div>
+                <div class="lex-stage">
+                    <div class="lex-stage-step">2 · Triage weak flags (LLM)</div>
+                    <div class="lex-stage-value">~4% of decisions</div>
+                    <div class="lex-stage-note">Flags just above the decision threshold go to an
+                    LLM that confirms real risks (with a plain-English summary and the exact
+                    clause) or clears false alarms</div>
+                </div>
+                <div class="lex-stage">
+                    <div class="lex-stage-step">3 · Human review queue</div>
+                    <div class="lex-stage-value">Ranked findings</div>
+                    <div class="lex-stage-note">Each finding shows the trigger phrases, the
+                    clause in context, and why that clause type costs money</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.subheader("What Lexorion looks for")
+        info = category_info()
+        glossary = pd.DataFrame(
+            [
+                {
+                    "Risk Category": v["display"],
+                    "What it covers": v["description"],
+                    "Real-world stakes": CATEGORY_STAKES.get(k, ""),
+                }
+                for k, v in info.items()
+            ]
+        )
+        st.dataframe(glossary, width="stretch", hide_index=True)
+        st.caption(
+            "Pick a document source above to run a live analysis — the demo "
+            "contract takes about two seconds."
+        )
 
 
 elif page == "Model Performance":
