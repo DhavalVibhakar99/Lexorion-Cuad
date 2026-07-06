@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lexorion · Contract Risk Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ["Inter", "ui-sans-serif", "system-ui"],
+          mono: ["JetBrains Mono", "ui-monospace"],
+        },
+        colors: {
+          gold: { 300: "#e8c07a", 400: "#e0aa4e", 500: "#d4952a", 600: "#b57b1e" },
+          ink: { 950: "#0e0d0a", 900: "#14120e", 850: "#191712", 800: "#1c1a15", 700: "#2c2920", 600: "#3a362c" },
+        },
+        boxShadow: {
+          glow: "0 0 40px rgba(212,149,42,0.10)",
+          card: "0 8px 30px rgba(0,0,0,0.25)",
+        },
+      },
+    },
+  };
+</script>
+<style>
+  ::selection { background: rgba(212,149,42,.35); }
+  .glass { backdrop-filter: blur(14px); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(212,149,42,.25); border-radius: 8px; }
+  html:not(.dark) ::-webkit-scrollbar-thumb { background: rgba(120,100,60,.35); }
+</style>
+</head>
+<body class="bg-ink-950 text-zinc-200 font-sans antialiased dark:bg-ink-950 dark:text-zinc-200 [html:not(.dark)_&]:bg-amber-50">
+<div id="root"></div>
+
+<script>
+  // Babel's stock "typescript" preset assumes .ts files (no JSX). Register a
+  // TSX-aware preset so the single-file setup can use TypeScript + JSX.
+  Babel.registerPreset("tsx", {
+    presets: [
+      [Babel.availablePresets["typescript"], { allExtensions: true, isTSX: true }],
+      Babel.availablePresets["react"],
+    ],
+  });
+</script>
+<script type="text/babel" data-presets="tsx">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ============================================================
+   Data — measured numbers from the Lexorion evaluation where
+   noted; time-series and queue rows are realistic demo data.
+   ============================================================ */
+
+type Category = {
+  id: string; name: string; short: string; recall: number; severity: number;
+  plain: string; covers: string; example: string; stakes: string; icon: string;
+};
+
+const CATEGORIES: Category[] = [
+  { id: "liability_risk", name: "Liability Risk", short: "Liability", recall: 0.974, severity: 0.95, icon: "⚖️",
+    plain: "If something goes wrong, this decides how much money you can actually recover — or be forced to pay. Caps often limit recovery to far less than your real loss.",
+    covers: "Limitation of liability, liability caps, uncapped liability, liquidated damages.",
+    example: "In no event shall either party's aggregate liability exceed the fees paid in the twelve (12) months preceding the claim.",
+    stakes: "One clause decided the CrowdStrike–Delta fight: a ~$500M loss against a liability cap of single-digit millions." },
+  { id: "ip_risk", name: "IP Risk", short: "IP", recall: 0.898, severity: 0.90, icon: "💡",
+    plain: "Who ends up owning the ideas, code, and inventions created under this contract — and who is allowed to keep using them.",
+    covers: "IP ownership assignment, license grants, non-competes, covenants not to sue.",
+    example: "All intellectual property developed under this Agreement shall be the sole and exclusive property of the Company.",
+    stakes: "Broad IP assignment can quietly transfer ownership of everything built under the contract." },
+  { id: "termination_risk", name: "Termination Risk", short: "Termination", recall: 0.910, severity: 0.85, icon: "🚪",
+    plain: "How easily either side can walk away from the deal, and what happens to your business when they do.",
+    covers: "Termination for convenience, effect of termination, post-termination services.",
+    example: "Either party may terminate this Agreement for any reason upon thirty (30) days' prior written notice.",
+    stakes: "Termination-for-convenience means revenue you planned on can vanish with 30 days' notice." },
+  { id: "indemnification", name: "Indemnification", short: "Indemnity", recall: 0.879, severity: 0.90, icon: "🛡️",
+    plain: "Who has to pay for lawsuits, damages, or losses when something connected to the deal goes wrong — you, them, or both.",
+    covers: "Indemnification obligations and insurance requirements.",
+    example: "Vendor shall indemnify, defend, and hold harmless Customer from any and all claims arising out of Vendor's performance.",
+    stakes: "One-way indemnification shifts the entire downside of a deal to one party." },
+  { id: "exclusivity", name: "Exclusivity & Restrictions", short: "Exclusivity", recall: 0.933, severity: 0.80, icon: "🔒",
+    plain: "Promises that limit who else you can do business with — like not selling to competitors or not hiring the other side's people.",
+    covers: "Exclusivity, non-competes, no-solicit of employees or customers.",
+    example: "During the Term, Customer shall not engage any competing provider for substantially similar services.",
+    stakes: "Non-competes and exclusivity lock you out of markets long after the deal stops making sense." },
+  { id: "change_of_control", name: "Change of Control", short: "Change of Ctrl", recall: 0.978, severity: 0.85, icon: "🏢",
+    plain: "What happens to the contract if either company gets bought or merged. Deals you rely on can change overnight when ownership changes.",
+    covers: "Change of control, anti-assignment, consent to assignment.",
+    example: "This Agreement may not be assigned without prior written consent, including by merger or change of control.",
+    stakes: "When Broadcom bought VMware, renewal rights evaporated and some customers faced ~1,050% cost increases." },
+  { id: "revenue_risk", name: "Revenue & Financial Risk", short: "Revenue", recall: 0.872, severity: 0.80, icon: "💰",
+    plain: "Money you are committing to spend or share — minimum purchases, revenue splits, price locks, and fees that escalate automatically.",
+    covers: "Minimum commitments, revenue sharing, price restrictions, most-favored-nation, audit rights.",
+    example: "Customer shall purchase a minimum of $250,000 in services during the first contract year.",
+    stakes: "A $50K/yr contract with an uncapped 7% escalator compounds to ~$370K over five years." },
+  { id: "renewal_expiration", name: "Renewal & Expiration", short: "Renewal", recall: 0.786, severity: 0.70, icon: "📅",
+    plain: "When the contract ends, whether it quietly renews by itself, and how much notice you need to give to escape it.",
+    covers: "Expiration dates, auto-renewal, renewal terms, notice windows.",
+    example: "This Agreement automatically renews for successive one-year terms unless either party gives notice ninety (90) days prior.",
+    stakes: "Auto-renewal with a missed notice window locks you into another full term at the vendor's price." },
+];
+
+// Measured results (same-sample, n=61; routing on 43,408 full-split decisions)
+const KPIS = [
+  { label: "Screening Recall", value: "90.4%", delta: "recall-first thresholds, full test split", up: true, hint: "9 in 10 risky clauses caught by the free local screen" },
+  { label: "LLM Escalation Rate", value: "4.4%", delta: "95.6% of decisions stay local", up: true, hint: "Share of paragraph × category decisions escalated for LLM triage" },
+  { label: "Hybrid F1", value: "0.852", delta: "+0.8 vs baseline · +8.8 vs LLM-only", up: true, hint: "Same-sample comparison — the router beats both components" },
+  { label: "Cost / Contract", value: "$0.00", delta: "budget-guarded free-tier routing", up: true, hint: "TF-IDF is free; LLM calls are capped, cached, and free-tier" },
+];
+
+const RANGES: Record<string, { labels: string[]; contracts: number[]; escalations: number[] }> = {
+  "7D": { labels: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+    contracts: [6, 9, 7, 11, 8, 3, 2], escalations: [2, 4, 3, 5, 3, 1, 1] },
+  "30D": { labels: ["W1","W2","W3","W4"],
+    contracts: [24, 31, 28, 39], escalations: [9, 12, 10, 14] },
+  "90D": { labels: ["Apr","May","Jun"],
+    contracts: [74, 96, 122], escalations: [28, 33, 41] },
+};
+
+type QueueRow = { id: string; contract: string; category: string; clause: string;
+  model: "LLM verified" | "Baseline" | "Weak flag"; confidence: number;
+  status: "Confirmed" | "Cleared" | "Pending review"; when: string };
+
+const QUEUE: QueueRow[] = [
+  { id: "LX-1042", contract: "Flowserve · Termination Agreement", category: "change_of_control", clause: "…may not be assigned, by operation of law or otherwise, without prior written consent…", model: "LLM verified", confidence: 0.93, status: "Confirmed", when: "2h ago" },
+  { id: "LX-1041", contract: "MSA · Meridian Software", category: "revenue_risk", clause: "Customer shall purchase a minimum of $250,000 in services during the first contract year…", model: "Baseline", confidence: 1.00, status: "Confirmed", when: "2h ago" },
+  { id: "LX-1040", contract: "MSA · Meridian Software", category: "liability_risk", clause: "…aggregate liability shall not exceed the fees paid in the twelve months preceding the claim…", model: "Baseline", confidence: 0.99, status: "Confirmed", when: "2h ago" },
+  { id: "LX-1039", contract: "MSA · Meridian Software", category: "termination_risk", clause: "Either party may terminate for any reason upon thirty (30) days' prior written notice…", model: "Baseline", confidence: 0.99, status: "Pending review", when: "3h ago" },
+  { id: "LX-1038", contract: "SaaS Order Form · Northgate", category: "renewal_expiration", clause: "…automatically renews for successive one-year terms unless notice is given ninety (90) days prior…", model: "LLM verified", confidence: 0.88, status: "Confirmed", when: "5h ago" },
+  { id: "LX-1037", contract: "Reseller Agreement · Kestrel", category: "exclusivity", clause: "Reseller shall not market or sell any competing products within the Territory…", model: "Weak flag", confidence: 0.31, status: "Cleared", when: "6h ago" },
+  { id: "LX-1036", contract: "Reseller Agreement · Kestrel", category: "ip_risk", clause: "All derivative works and improvements shall vest exclusively in the Licensor…", model: "LLM verified", confidence: 0.91, status: "Confirmed", when: "6h ago" },
+  { id: "LX-1035", contract: "Supply Agreement · Halcyon", category: "indemnification", clause: "Supplier shall indemnify and hold harmless Buyer against all third-party claims…", model: "Baseline", confidence: 0.97, status: "Pending review", when: "8h ago" },
+  { id: "LX-1034", contract: "Supply Agreement · Halcyon", category: "revenue_risk", clause: "Prices shall increase annually by the greater of CPI or seven percent (7%)…", model: "LLM verified", confidence: 0.86, status: "Confirmed", when: "8h ago" },
+  { id: "LX-1033", contract: "Services Agreement · Bluewater", category: "liability_risk", clause: "…in no event liable for indirect, incidental, or consequential damages of any kind…", model: "Baseline", confidence: 0.95, status: "Confirmed", when: "1d ago" },
+  { id: "LX-1032", contract: "Services Agreement · Bluewater", category: "termination_risk", clause: "Upon termination, Customer shall pay all fees for the remainder of the then-current term…", model: "Weak flag", confidence: 0.28, status: "Cleared", when: "1d ago" },
+  { id: "LX-1031", contract: "License Agreement · Orion Labs", category: "change_of_control", clause: "A change of control of Licensee shall constitute an assignment requiring consent…", model: "LLM verified", confidence: 0.94, status: "Confirmed", when: "1d ago" },
+];
+
+/* ============================================================
+   Small building blocks
+   ============================================================ */
+
+function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
+  const tones: Record<string, string> = {
+    green: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/25",
+    gold: "bg-gold-500/10 text-gold-400 ring-gold-500/30",
+    red: "bg-rose-500/10 text-rose-400 ring-rose-500/25",
+    zinc: "bg-zinc-500/10 text-zinc-400 ring-zinc-500/25",
+    blue: "bg-sky-500/10 text-sky-400 ring-sky-500/25",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ${tones[tone] || tones.zinc}`}>
+      {children}
+    </span>
+  );
+}
+
+function KpiCard({ k }: { k: (typeof KPIS)[number] }) {
+  return (
+    <div title={k.hint}
+      className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03] glass p-5 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:border-gold-500/30 hover:shadow-glow">
+      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gold-500/5 blur-2xl transition-opacity group-hover:opacity-100" />
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">{k.label}</p>
+      <p className="mt-2 text-3xl font-bold text-zinc-100">{k.value}</p>
+      <div className="mt-3 flex items-center gap-2">
+        <Badge tone={k.up ? "green" : "red"}>
+          <svg className={`h-3 w-3 ${k.up ? "" : "rotate-180"}`} viewBox="0 0 12 12" fill="currentColor"><path d="M6 2l4 5H2z"/></svg>
+          {k.up ? "healthy" : "attention"}
+        </Badge>
+        <span className="truncate text-xs text-zinc-500">{k.delta}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Charts (Chart.js via refs, theme-aware, range-reactive)
+   ============================================================ */
+
+function useChart(build: (ctx: CanvasRenderingContext2D) => any, deps: any[]) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    chartRef.current?.destroy();
+    chartRef.current = new Chart(canvasRef.current.getContext("2d"), build(canvasRef.current.getContext("2d")));
+    return () => chartRef.current?.destroy();
+  }, deps);
+  return canvasRef;
+}
+
+function chartTheme(dark: boolean) {
+  return {
+    grid: dark ? "rgba(255,255,255,0.05)" : "rgba(60,50,30,0.08)",
+    ticks: dark ? "#8a8171" : "#6b6250",
+    legend: dark ? "#c9c2b4" : "#4a4436",
+  };
+}
+
+function VolumeChart({ range, dark }: { range: string; dark: boolean }) {
+  const t = chartTheme(dark);
+  const d = RANGES[range];
+  const ref = useChart((ctx) => {
+    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    gradient.addColorStop(0, "rgba(212,149,42,0.28)");
+    gradient.addColorStop(1, "rgba(212,149,42,0)");
+    return {
+      type: "line",
+      data: { labels: d.labels, datasets: [
+        { label: "Contracts analyzed", data: d.contracts, borderColor: "#d4952a", backgroundColor: gradient,
+          fill: true, tension: 0.42, borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: "#d4952a" },
+        { label: "LLM escalations", data: d.escalations, borderColor: "#7ec8e3", backgroundColor: "transparent",
+          borderDash: [6, 5], tension: 0.42, borderWidth: 2, pointRadius: 3, pointBackgroundColor: "#7ec8e3" },
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: t.legend, usePointStyle: true, boxWidth: 7, font: { family: "Inter", size: 11 } } } },
+        scales: {
+          x: { grid: { color: t.grid }, ticks: { color: t.ticks, font: { size: 11 } } },
+          y: { grid: { color: t.grid }, ticks: { color: t.ticks, font: { size: 11 } }, beginAtZero: true },
+        },
+      },
+    };
+  }, [range, dark]);
+  return <div className="h-64"><canvas ref={ref} /></div>;
+}
+
+function RecallChart({ dark, selected, onSelect }: { dark: boolean; selected: string | null; onSelect: (id: string) => void }) {
+  const t = chartTheme(dark);
+  const ref = useChart(() => ({
+    type: "bar",
+    data: {
+      labels: CATEGORIES.map((c) => c.short),
+      datasets: [{
+        label: "Screening recall (full test split)",
+        data: CATEGORIES.map((c) => c.recall),
+        backgroundColor: CATEGORIES.map((c) =>
+          selected && c.id !== selected ? "rgba(212,149,42,0.18)" : c.recall >= 0.9 ? "rgba(63,185,80,0.75)" : "rgba(212,149,42,0.8)"),
+        borderRadius: 7, borderSkipped: false, maxBarThickness: 34,
+      }],
+    },
+    options: {
+      indexAxis: "y", responsive: true, maintainAspectRatio: false,
+      onClick: (_evt: any, els: any[]) => { if (els.length) onSelect(CATEGORIES[els[0].index].id); },
+      plugins: { legend: { display: false },
+        tooltip: { callbacks: { label: (c: any) => ` recall ${(c.raw * 100).toFixed(1)}% — click for details` } } },
+      scales: {
+        x: { min: 0, max: 1, grid: { color: t.grid }, ticks: { color: t.ticks, font: { size: 11 }, callback: (v: number) => `${v * 100}%` } },
+        y: { grid: { display: false }, ticks: { color: t.ticks, font: { size: 11 } } },
+      },
+    },
+  }), [dark, selected]);
+  return <div className="h-64"><canvas ref={ref} /></div>;
+}
+
+/* ============================================================
+   Category chips + detail modal (the clickable taxonomy)
+   ============================================================ */
+
+function CategoryChips({ selected, onSelect }: { selected: string | null; onSelect: (id: string | null) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {CATEGORIES.map((c) => {
+        const active = selected === c.id;
+        return (
+          <button key={c.id} onClick={() => onSelect(active ? null : c.id)}
+            className={`group flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all duration-200
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60
+              ${active
+                ? "border-gold-500/60 bg-gold-500/15 text-gold-300 shadow-glow"
+                : "border-white/10 bg-white/[0.03] text-zinc-400 hover:border-gold-500/40 hover:text-gold-300"}`}>
+            <span aria-hidden>{c.icon}</span>{c.name}
+            <span className={`ml-0.5 text-[10px] ${active ? "text-gold-400" : "text-zinc-600 group-hover:text-gold-500/70"}`}>ⓘ</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CategoryModal({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const cat = CATEGORIES.find((c) => c.id === id);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!cat) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-gold-500/25 bg-ink-850/95 glass shadow-glow
+        animate-[pop_.18s_ease-out] [html:not(.dark)_&]:bg-white/95 [html:not(.dark)_&]:border-amber-300">
+        <style>{`@keyframes pop { from { transform: scale(.96); opacity: 0 } to { transform: scale(1); opacity: 1 } }`}</style>
+        <div className="flex items-start justify-between border-b border-white/5 px-6 py-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-500">Risk category</p>
+            <h3 className="mt-0.5 text-lg font-bold text-zinc-100 [html:not(.dark)_&]:text-zinc-800">{cat.icon} {cat.name}</h3>
+          </div>
+          <button onClick={onClose} aria-label="Close"
+            className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M6.3 6.3a1 1 0 011.4 0L10 8.6l2.3-2.3a1 1 0 111.4 1.4L11.4 10l2.3 2.3a1 1 0 01-1.4 1.4L10 11.4l-2.3 2.3a1 1 0 01-1.4-1.4L8.6 10 6.3 7.7a1 1 0 010-1.4z"/></svg>
+          </button>
+        </div>
+        <div className="space-y-4 px-6 py-5 text-sm">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">In plain English</p>
+            <p className="leading-relaxed text-zinc-300 [html:not(.dark)_&]:text-zinc-700">{cat.plain}</p>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">What it looks like in a contract</p>
+            <p className="rounded-lg border border-white/5 bg-black/30 p-3 font-mono text-[12px] leading-relaxed text-zinc-400 [html:not(.dark)_&]:bg-amber-100/60 [html:not(.dark)_&]:text-zinc-700">
+              “{cat.example}”
+            </p>
+          </div>
+          <div className="rounded-lg border-l-2 border-sky-400/60 bg-sky-400/5 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-400">Real-world stakes</p>
+            <p className="mt-1 leading-relaxed text-zinc-400 [html:not(.dark)_&]:text-zinc-600">{cat.stakes}</p>
+          </div>
+          <div className="flex items-center justify-between border-t border-white/5 pt-4 text-xs text-zinc-500">
+            <span>Covers: {cat.covers}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge tone="green">screening recall {(cat.recall * 100).toFixed(1)}%</Badge>
+            <Badge tone="gold">severity weight {cat.severity.toFixed(2)}</Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Review queue table with search, category filter, pagination
+   ============================================================ */
+
+const PAGE_SIZE = 5;
+
+function QueueTable({ selected, search, onSelectCategory }:
+  { selected: string | null; search: string; onSelectCategory: (id: string) => void }) {
+  const [page, setPage] = useState(1);
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return QUEUE.filter((r) =>
+      (!selected || r.category === selected) &&
+      (!q || r.clause.toLowerCase().includes(q) || r.contract.toLowerCase().includes(q) || r.id.toLowerCase().includes(q)));
+  }, [selected, search]);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pages);
+  useEffect(() => setPage(1), [selected, search]);
+
+  const statusTone: Record<QueueRow["status"], string> = { Confirmed: "red", "Pending review": "gold", Cleared: "green" };
+  const modelTone: Record<QueueRow["model"], string> = { "LLM verified": "blue", Baseline: "zinc", "Weak flag": "gold" };
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-zinc-500">
+              <th className="py-3 pr-4 font-semibold">Finding</th>
+              <th className="py-3 pr-4 font-semibold">Category</th>
+              <th className="py-3 pr-4 font-semibold">Clause excerpt</th>
+              <th className="py-3 pr-4 font-semibold">Model</th>
+              <th className="py-3 pr-4 font-semibold">Conf.</th>
+              <th className="py-3 pr-4 font-semibold">Status</th>
+              <th className="py-3 font-semibold">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE).map((r) => {
+              const cat = CATEGORIES.find((c) => c.id === r.category)!;
+              return (
+                <tr key={r.id} className="group border-b border-white/[0.04] transition-colors hover:bg-gold-500/[0.04]">
+                  <td className="py-3.5 pr-4">
+                    <p className="font-mono text-xs text-gold-400">{r.id}</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">{r.contract}</p>
+                  </td>
+                  <td className="py-3.5 pr-4">
+                    <button onClick={() => onSelectCategory(r.category)}
+                      className="rounded-md text-xs font-medium text-zinc-300 underline decoration-dotted decoration-zinc-600 underline-offset-4 transition hover:text-gold-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+                      {cat.icon} {cat.short}
+                    </button>
+                  </td>
+                  <td className="max-w-[280px] truncate py-3.5 pr-4 font-mono text-[12px] text-zinc-500 group-hover:text-zinc-400" title={r.clause}>{r.clause}</td>
+                  <td className="py-3.5 pr-4"><Badge tone={modelTone[r.model]}>{r.model}</Badge></td>
+                  <td className="py-3.5 pr-4 tabular-nums text-zinc-300">{(r.confidence * 100).toFixed(0)}%</td>
+                  <td className="py-3.5 pr-4"><Badge tone={statusTone[r.status]}>{r.status}</Badge></td>
+                  <td className="py-3.5 text-xs text-zinc-500">{r.when}</td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="py-10 text-center text-sm text-zinc-500">No findings match this filter.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+        <span>{rows.length} finding{rows.length === 1 ? "" : "s"}{selected ? " · filtered" : ""}</span>
+        <div className="flex items-center gap-1.5">
+          <button disabled={safePage === 1} onClick={() => setPage(safePage - 1)}
+            className="rounded-lg border border-white/10 px-3 py-1.5 transition enabled:hover:border-gold-500/40 enabled:hover:text-gold-300 disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">Prev</button>
+          {Array.from({ length: pages }, (_, i) => (
+            <button key={i} onClick={() => setPage(i + 1)}
+              className={`h-8 w-8 rounded-lg border text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60
+                ${safePage === i + 1 ? "border-gold-500/60 bg-gold-500/15 text-gold-300" : "border-white/10 hover:border-gold-500/40 hover:text-gold-300"}`}>{i + 1}</button>
+          ))}
+          <button disabled={safePage === pages} onClick={() => setPage(safePage + 1)}
+            className="rounded-lg border border-white/10 px-3 py-1.5 transition enabled:hover:border-gold-500/40 enabled:hover:text-gold-300 disabled:opacity-35 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">Next</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Shell: sidebar, header, layout
+   ============================================================ */
+
+const NAV = [
+  { id: "overview", label: "Overview", icon: "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10" },
+  { id: "queue", label: "Review Queue", icon: "M4 6h16M4 12h16M4 18h10" },
+  { id: "performance", label: "Model Performance", icon: "M4 19V5m0 14h16M8 15l3-4 3 2 4-6" },
+  { id: "taxonomy", label: "Risk Taxonomy", icon: "M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zm0 0v18" },
+];
+
+function Sidebar({ active, onNav, open, onClose }:
+  { active: string; onNav: (id: string) => void; open: boolean; onClose: () => void }) {
+  return (
+    <>
+      {open && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={onClose} />}
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/5 bg-ink-900/90 glass px-4 py-6
+        transition-transform duration-300 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0
+        [html:not(.dark)_&]:bg-white/85 [html:not(.dark)_&]:border-amber-200
+        ${open ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex items-center gap-3 px-2">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 font-extrabold text-ink-950 shadow-glow">LX</div>
+          <div>
+            <p className="text-sm font-bold tracking-wide text-zinc-100 [html:not(.dark)_&]:text-zinc-800">Lexorion</p>
+            <p className="text-[11px] text-zinc-500">Contract risk intelligence</p>
+          </div>
+        </div>
+        <nav className="mt-8 flex flex-col gap-1">
+          {NAV.map((n) => (
+            <button key={n.id} onClick={() => { onNav(n.id); onClose(); }}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60
+                ${active === n.id
+                  ? "bg-gold-500/12 text-gold-300 shadow-[inset_2px_0_0_0_#d4952a]"
+                  : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200 [html:not(.dark)_&]:hover:bg-amber-100"}`}>
+              <svg className="h-4.5 w-4.5 shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={n.icon} /></svg>
+              {n.label}
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto rounded-xl border border-white/5 bg-white/[0.03] p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Pipeline status</p>
+          <div className="mt-2 space-y-1.5 text-xs">
+            <p className="flex justify-between text-zinc-400"><span>Baseline screen</span><span className="text-emerald-400">● Live</span></p>
+            <p className="flex justify-between text-zinc-400"><span>LLM triage</span><span className="text-emerald-400">● Live</span></p>
+            <p className="flex justify-between text-zinc-400"><span>DeBERTa</span><span className="text-zinc-500">Planned</span></p>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function Header({ dark, onToggleDark, onMenu, search, onSearch }:
+  { dark: boolean; onToggleDark: () => void; onMenu: () => void; search: string; onSearch: (v: string) => void }) {
+  return (
+    <header className="sticky top-0 z-20 border-b border-white/5 bg-ink-950/80 glass px-4 py-3 lg:px-8 [html:not(.dark)_&]:bg-amber-50/80 [html:not(.dark)_&]:border-amber-200">
+      <div className="flex items-center gap-3">
+        <button onClick={onMenu} aria-label="Open menu"
+          className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/5 hover:text-zinc-100 lg:hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div className="relative w-full max-w-md">
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input value={search} onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search findings, contracts, clauses…"
+            className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-10 pr-4 text-sm text-zinc-200 placeholder-zinc-600 transition
+              focus:border-gold-500/50 focus:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-gold-500/20
+              [html:not(.dark)_&]:bg-white [html:not(.dark)_&]:text-zinc-800 [html:not(.dark)_&]:border-amber-200" />
+        </div>
+        <div className="ml-auto flex items-center gap-2.5">
+          <button onClick={onToggleDark} aria-label="Toggle theme"
+            className="rounded-xl border border-white/10 p-2.5 text-zinc-400 transition hover:border-gold-500/40 hover:text-gold-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+            {dark
+              ? <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4l1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+              : <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>}
+          </button>
+          <div className="hidden items-center gap-3 rounded-xl border border-white/10 py-1.5 pl-1.5 pr-4 sm:flex">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-ink-950">DV</div>
+            <div className="leading-tight">
+              <p className="text-xs font-semibold text-zinc-200 [html:not(.dark)_&]:text-zinc-800">Dhaval Vibhakar</p>
+              <p className="text-[10px] text-zinc-500">Engineering Lead</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+/* ============================================================
+   App
+   ============================================================ */
+
+function SectionTitle({ overline, title, sub }: { overline: string; title: string; sub?: string }) {
+  return (
+    <div className="mb-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-500">{overline}</p>
+      <h2 className="mt-0.5 text-lg font-bold text-zinc-100 [html:not(.dark)_&]:text-zinc-800">{title}</h2>
+      {sub && <p className="mt-1 text-xs leading-relaxed text-zinc-500">{sub}</p>}
+    </div>
+  );
+}
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-white/5 bg-white/[0.03] glass p-5 shadow-card [html:not(.dark)_&]:bg-white/70 [html:not(.dark)_&]:border-amber-200 ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [dark, setDark] = useState(true);
+  const [nav, setNav] = useState("overview");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [range, setRange] = useState("30D");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [modalCategory, setModalCategory] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    document.body.style.background = dark ? "#0e0d0a" : "#fdf8ee";
+    document.body.style.color = dark ? "#d6d0c4" : "#3d382d";
+  }, [dark]);
+
+  const refs = { overview: useRef<HTMLDivElement>(null), queue: useRef<HTMLDivElement>(null),
+    performance: useRef<HTMLDivElement>(null), taxonomy: useRef<HTMLDivElement>(null) };
+  const goto = useCallback((id: string) => {
+    setNav(id);
+    refs[id as keyof typeof refs]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const openCategory = (id: string) => { setSelectedCategory(id); setModalCategory(id); };
+
+  return (
+    <div className="flex min-h-screen">
+      <Sidebar active={nav} onNav={goto} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <div className="min-w-0 flex-1">
+        <Header dark={dark} onToggleDark={() => setDark(!dark)} onMenu={() => setMenuOpen(true)}
+          search={search} onSearch={setSearch} />
+
+        <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 lg:px-8">
+
+          {/* Overview */}
+          <section ref={refs.overview} className="scroll-mt-20">
+            <SectionTitle overline="Command center" title="Contract risk at a glance"
+              sub="A recall-first local screen reads everything for free; an LLM triages only the weak flags. Numbers below are measured on the CUAD test split." />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {KPIS.map((k) => <KpiCard key={k.label} k={k} />)}
+            </div>
+          </section>
+
+          {/* Taxonomy chips */}
+          <section ref={refs.taxonomy} className="scroll-mt-20">
+            <Card>
+              <SectionTitle overline="Risk taxonomy" title="8 business categories — click any to understand it"
+                sub="Each card explains the category in plain English, shows what the clause looks like in a real contract, and why it costs money. Clicking also filters the review queue." />
+              <CategoryChips selected={selectedCategory}
+                onSelect={(id) => { setSelectedCategory(id); if (id) setModalCategory(id); }} />
+              {selectedCategory && (
+                <button onClick={() => setSelectedCategory(null)}
+                  className="mt-3 text-xs text-zinc-500 underline decoration-dotted underline-offset-4 transition hover:text-gold-300">
+                  Clear filter — showing only {CATEGORIES.find((c) => c.id === selectedCategory)?.name}
+                </button>
+              )}
+            </Card>
+          </section>
+
+          {/* Charts */}
+          <section ref={refs.performance} className="grid scroll-mt-20 grid-cols-1 gap-4 xl:grid-cols-5">
+            <Card className="xl:col-span-3">
+              <div className="mb-1 flex items-start justify-between gap-4">
+                <SectionTitle overline="Throughput" title="Review volume"
+                  sub="Contracts analyzed vs. clauses escalated to the LLM (demo data)." />
+                <div className="flex gap-1 rounded-xl border border-white/10 p-1">
+                  {Object.keys(RANGES).map((r) => (
+                    <button key={r} onClick={() => setRange(r)}
+                      className={`rounded-lg px-3 py-1 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60
+                        ${range === r ? "bg-gold-500/15 text-gold-300" : "text-zinc-500 hover:text-zinc-200"}`}>{r}</button>
+                  ))}
+                </div>
+              </div>
+              <VolumeChart range={range} dark={dark} />
+            </Card>
+            <Card className="xl:col-span-2">
+              <SectionTitle overline="Measured on CUAD" title="Screening recall by category"
+                sub="Recall-first thresholds target ≥90% on validation — green bars hit the target on test. Click a bar for the category explainer." />
+              <RecallChart dark={dark} selected={selectedCategory} onSelect={openCategory} />
+            </Card>
+          </section>
+
+          {/* Queue */}
+          <section ref={refs.queue} className="scroll-mt-20">
+            <Card>
+              <SectionTitle overline="Human review" title="Recent findings"
+                sub="LLM-verified findings carry a plain-English summary; weak flags the LLM cleared are logged as review noise avoided. Use the header search or category chips to filter." />
+              <QueueTable selected={selectedCategory} search={search} onSelectCategory={openCategory} />
+            </Card>
+          </section>
+
+          <footer className="pb-6 text-center text-[11px] text-zinc-600">
+            Lexorion · CUAD-trained hybrid screening — recall 0.904 locally, 4.4% of decisions escalated, $0 marginal cost ·
+            <a className="ml-1 text-gold-500 underline decoration-dotted underline-offset-4 hover:text-gold-300" href="https://github.com/sahilshinde-45/Lexorion">GitHub</a>
+          </footer>
+        </main>
+      </div>
+
+      <CategoryModal id={modalCategory} onClose={() => setModalCategory(null)} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
