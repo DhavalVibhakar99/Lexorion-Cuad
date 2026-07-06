@@ -12,7 +12,7 @@ pinned: false
 
 A collaborative AI/data science project for automated legal contract risk analysis. Lexorion uses the CUAD contract dataset to detect business-relevant legal risk clauses and turn long contract text into a structured risk profile.
 
-> Current status: the end-to-end product loop works — contract in (text or PDF), baseline scoring, LLM escalation of uncertain clauses via OpenRouter, and a deployable Streamlit dashboard. DeBERTa fine-tuning remains a planned milestone (requires GPU).
+> Status: complete. Live React app + FastAPI inference service, measured hybrid routing (TF-IDF screen + LLM triage), and a finished model bake-off — including fine-tuned DeBERTa, which lost to the lexical baseline at matched recall.
 
 ## Try It
 
@@ -73,7 +73,7 @@ Liquidated Damages
 | LLM classification | Complete | Budget-guarded OpenRouter classifier with caching, JSON validation, and guardrails; evaluated on all 8 categories. |
 | Hybrid routing | Complete | Baseline scores everything; near-threshold clauses escalate to the LLM, live in the dashboard. |
 | Deployment | Ready | Slim `requirements.txt` + secrets template + Streamlit Cloud instructions below. |
-| DeBERTa training | Ready to run | One-click Colab notebook ([notebooks/02_deberta_colab.ipynb](notebooks/02_deberta_colab.ipynb)): single multi-label fine-tune, recall-first thresholds, drops straight into the comparison. |
+| DeBERTa training | Complete | Multi-label fine-tune on Colab T4 ([notebook](notebooks/02_deberta_colab.ipynb)); result: loses to TF-IDF at matched recall — documented as a negative finding. |
 
 ## Architecture
 
@@ -97,8 +97,8 @@ Liquidated Damages
                     └─────────────────┘     │  (+ Streamlit local)  │
                                             └──────────────────────┘
 
-Planned: swap the baseline scorer for a fine-tuned DeBERTa once GPU training
-is available; the router design stays the same.
+Tested and rejected: swapping the baseline scorer for a fine-tuned DeBERTa —
+it lost to TF-IDF at matched recall (see Results). The lexical screen stays.
 ```
 
 ## Risk Categories
@@ -241,8 +241,9 @@ operating philosophy as AML transaction monitoring.
 
 | Model | Macro Recall | Macro Precision | Notes |
 |-------|--------------|-----------------|-------|
-| TF-IDF + LogReg | **0.904** | 0.248 | Production screen: catches 9 in 10 risky clauses |
-| MiniLM embeddings + LogReg | 0.907 | 0.107 | Frozen transformer — **loses to TF-IDF** (see below) |
+| TF-IDF + LogReg | **0.904** | **0.248** | Production screen: catches 9 in 10 risky clauses |
+| MiniLM embeddings + LogReg | 0.907 | 0.107 | Frozen transformer — loses to TF-IDF (see below) |
+| DeBERTa-v3-base, fine-tuned | 0.874 | 0.107 | Multi-label fine-tune (2 epochs, free Colab T4) — also loses (see below) |
 
 **Stage 2 — LLM triage of weak flags (same 61-paragraph eval sample for all
 three rows, so the comparison is apples-to-apples):**
@@ -266,14 +267,27 @@ Honesty notes, because they matter:
 - The LLM sample is small (n=61; free-tier rate caps). Rate-limited API errors
   are excluded from scoring, never counted as predictions, and never cached.
 
-**A negative result worth keeping:** we tested frozen MiniLM sentence
-embeddings as the "obvious" transformer upgrade over TF-IDF. At matched recall
-(~0.90) they *halve* precision (0.107 vs 0.248). Clause detection is heavily
-lexical — phrases like "indemnify and hold harmless" are near-perfect signals
-that TF-IDF bigrams capture directly, while general-purpose embeddings blur
-them into topical similarity. Conclusion: the worthwhile transformer step is
-*fine-tuning* (DeBERTa, GPU required — `src/models/clause_detector.py` is
-ready for a free Colab T4), not frozen general-purpose embeddings.
+**The transformer experiments — two negative results worth keeping:**
+
+1. *Frozen MiniLM embeddings* as the "obvious" upgrade over TF-IDF: at matched
+   recall (~0.90) they halve precision (0.107 vs 0.248). Clause detection is
+   heavily lexical — phrases like "indemnify and hold harmless" are
+   near-perfect signals that TF-IDF bigrams capture directly, while
+   general-purpose embeddings blur them into topical similarity.
+2. *Fine-tuned DeBERTa-v3-base* (single multi-label run, 8 sigmoid heads,
+   BCE + pos_weight, 2 epochs — the budget of a free Colab T4 session, via
+   [notebooks/02_deberta_colab.ipynb](notebooks/02_deberta_colab.ipynb)):
+   precision 0.107 at recall 0.874 — identical to the frozen embeddings, still
+   well short of TF-IDF. The tell: recall-first thresholds bottomed out at the
+   sweep floor for 7/8 categories, i.e. the model's scores barely separate
+   classes at this training budget. More epochs and per-category tuning would
+   likely help, but the honest conclusion stands:
+
+**On this task, bag-of-words beat a transformer twice at matched recall.**
+The lexical baseline is the right free screen, and precision comes from the
+LLM triage layer — not from a bigger local encoder. That finding is why the
+production architecture is TF-IDF + LLM routing rather than "use a
+transformer because transformers are better."
 
 Baseline error analysis samples are available in:
 
