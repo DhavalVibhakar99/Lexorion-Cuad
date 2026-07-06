@@ -20,7 +20,7 @@ Lexorion ships as a React website backed by a FastAPI inference service:
 
 | | What it is | Link |
 |---|---|---|
-| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **[sahilshinde-45.github.io/Lexorion/demo](https://sahilshinde-45.github.io/Lexorion/demo/)** (requires the repo to be public with Pages enabled: Settings → Pages → `main`, `/docs`) |
+| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **[dhavalvibhakar99.github.io/Lexorion-Cuad/demo](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/)** (requires the repo to be public with Pages enabled: Settings → Pages → `main`, `/docs`) |
 | **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | **Live:** [dhaval99-lexorion-cuad.hf.space](https://dhaval99-lexorion-cuad.hf.space) · [interactive docs](https://dhaval99-lexorion-cuad.hf.space/docs) · [Space](https://huggingface.co/spaces/dhaval99/lexorion_cuad) |
 | **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
@@ -174,7 +174,7 @@ contract-risk-intel/
 
 ```bash
 # Clone and setup
-git clone https://github.com/sahilshinde-45/Lexorion.git
+git clone https://github.com/DhavalVibhakar99/Lexorion-Cuad.git
 cd Lexorion
 pip install -r requirements-dev.txt   # full training/eval stack
 # (dashboard-only: pip install -r requirements.txt)

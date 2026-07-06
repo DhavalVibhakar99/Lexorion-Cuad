@@ -222,7 +222,7 @@ class LLMClassifier:
                 default_headers={
                     "HTTP-Referer": os.getenv(
                         "OPENROUTER_SITE_URL",
-                        "https://github.com/sahilshinde-45/Lexorion",
+                        "https://github.com/DhavalVibhakar99/Lexorion-Cuad",
                     ),
                     "X-OpenRouter-Title": os.getenv(
                         "OPENROUTER_APP_NAME",

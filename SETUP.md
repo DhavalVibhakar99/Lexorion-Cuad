@@ -148,7 +148,7 @@ Optional `.env` values:
 ```bash
 OPENROUTER_API_KEY=your-key-here
 OPENROUTER_MODEL=openai/gpt-4o-mini
-OPENROUTER_SITE_URL=https://github.com/sahilshinde-45/Lexorion
+OPENROUTER_SITE_URL=https://github.com/DhavalVibhakar99/Lexorion-Cuad
 OPENROUTER_APP_NAME=Lexorion Contract Risk Intelligence
 ```
 
