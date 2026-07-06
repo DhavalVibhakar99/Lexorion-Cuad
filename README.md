@@ -11,7 +11,7 @@ Lexorion ships as a React website backed by a FastAPI inference service:
 | | What it is | Link |
 |---|---|---|
 | **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | `https://<your-github-username>.github.io/Lexorion/demo/` after enabling GitHub Pages (Settings → Pages → `main`, `/docs` folder) |
-| **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | Deploy the repo [Dockerfile](Dockerfile) to a free Hugging Face Space, then paste the Space URL into the API field on the website |
+| **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | Deploy the repo [Dockerfile](Dockerfile) to a free Hugging Face Space, then set `PROD_API` in [docs/demo/index.html](docs/demo/index.html) to the Space URL |
 | **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
 Run everything locally:
@@ -206,10 +206,12 @@ streamlit run src/dashboard/app.py
 
 **2. Frontend — GitHub Pages:**
 
-1. Repo Settings → Pages → deploy from branch → `main`, `/docs` folder.
-2. Open `https://<your-github-username>.github.io/Lexorion/demo/` and paste
-   your Space URL into the API field (top-right of the Analyze panel — it's
-   remembered in the browser).
+1. Set the `PROD_API` constant near the top of the script in
+   [docs/demo/index.html](docs/demo/index.html) to your Space URL and commit.
+   (The API endpoint is deliberately not user-editable on the site; when the
+   file is opened locally it talks to `localhost:8000` automatically.)
+2. Repo Settings → Pages → deploy from branch → `main`, `/docs` folder.
+3. Open `https://<your-github-username>.github.io/Lexorion/demo/`.
 
 **Optional — Streamlit UI on share.streamlit.io:** point an app at
 `src/dashboard/app.py`, Python 3.11, secrets from
