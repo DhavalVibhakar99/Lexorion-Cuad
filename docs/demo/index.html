@@ -424,11 +424,250 @@ function QueueTable({ selected, search, onSelectCategory }:
 }
 
 /* ============================================================
+   Live analysis workspace — calls the Lexorion FastAPI backend
+   ============================================================ */
+
+const SAMPLE_CONTRACT = `MASTER SERVICES AGREEMENT
+
+The Vendor shall provide software implementation and support services to the Customer. Vendor will process Customer Data only as necessary to provide the services and shall maintain reasonable administrative, technical, and physical safeguards.
+
+Vendor shall notify Customer within seventy-two (72) hours of becoming aware of any security incident involving Customer personal data. Vendor shall cooperate with Customer in investigating the incident and providing legally required notices.
+
+IN NO EVENT SHALL VENDOR'S AGGREGATE LIABILITY ARISING OUT OF THIS AGREEMENT EXCEED THE FEES PAID BY CUSTOMER DURING THE TWELVE (12) MONTHS PRECEDING THE CLAIM, except for fraud, willful misconduct, breach of confidentiality, or data protection obligations.
+
+All intellectual property developed by Vendor specifically for Customer under a statement of work shall be assigned to Customer upon full payment. Vendor retains ownership of its pre-existing tools, templates, and know-how.
+
+Either party may terminate this Agreement for convenience upon thirty (30) days' prior written notice. Upon termination, Vendor shall return or destroy Customer confidential information and provide reasonable transition assistance.
+
+Customer shall purchase a minimum of $250,000 in services during the first contract year. If Customer fails to meet the minimum commitment, Customer shall pay the difference within thirty (30) days after year end.`;
+
+const DEFAULT_API = localStorage.getItem("lexorion_api") || "http://localhost:8000";
+
+function riskColor(score: number) {
+  if (score >= 0.7) return "#e5534b";
+  if (score >= 0.4) return "#d4952a";
+  return "#3fb950";
+}
+
+function FindingCard({ d, onCategory }: { d: any; onCategory: (id: string) => void }) {
+  const cat = CATEGORIES.find((c) => c.id === d.risk_category);
+  const modelBadge = d.model_used === "llm"
+    ? <Badge tone="blue">LLM verified</Badge>
+    : d.model_used === "baseline_fallback"
+      ? <Badge tone="gold">Weak flag (unreviewed)</Badge>
+      : <Badge tone="zinc">Baseline</Badge>;
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 transition hover:border-gold-500/25">
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => onCategory(d.risk_category)}
+          className="text-sm font-semibold text-zinc-100 underline decoration-dotted decoration-zinc-600 underline-offset-4 transition hover:text-gold-300 [html:not(.dark)_&]:text-zinc-800">
+          {cat ? `${cat.icon} ${cat.name}` : d.risk_category}
+        </button>
+        {modelBadge}
+        <Badge tone={d.risk_level === "high" || d.risk_level === "critical" ? "red" : d.risk_level === "moderate" ? "gold" : "zinc"}>
+          {d.risk_level}
+        </Badge>
+        <span className="ml-auto font-mono text-xs text-zinc-500">{(d.confidence * 100).toFixed(0)}% conf.</span>
+      </div>
+      {d.summary && <p className="mt-2 text-sm leading-relaxed text-zinc-400">{d.summary}</p>}
+      {(d.evidence_terms || []).length > 0 && (
+        <div className="mt-2">
+          <span className="text-[11px] text-zinc-500">Triggered by: </span>
+          {d.evidence_terms.map((t: string) => (
+            <span key={t} className="mr-1.5 inline-block rounded-full border border-gold-500/40 bg-gold-500/10 px-2 py-0.5 font-mono text-[11px] text-gold-300">{t}</span>
+          ))}
+        </div>
+      )}
+      {d.extracted_clause && (
+        <p className="mt-3 max-h-28 overflow-y-auto rounded-lg border border-white/5 bg-black/30 p-3 font-mono text-[11.5px] leading-relaxed text-zinc-500 [html:not(.dark)_&]:bg-amber-100/60 [html:not(.dark)_&]:text-zinc-700">
+          {d.extracted_clause}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AnalyzeSection({ onCategory }: { onCategory: (id: string) => void }) {
+  const [apiBase, setApiBase] = useState(DEFAULT_API);
+  const [apiUp, setApiUp] = useState<null | boolean>(null);
+  const [llmReady, setLlmReady] = useState(false);
+  const [text, setText] = useState("");
+  const [useLlm, setUseLlm] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("lexorion_api", apiBase);
+    let cancelled = false;
+    setApiUp(null);
+    fetch(`${apiBase}/health`).then((r) => r.json()).then((h) => {
+      if (!cancelled) { setApiUp(h.status === "ok"); setLlmReady(!!h.llm_ready); }
+    }).catch(() => !cancelled && setApiUp(false));
+    return () => { cancelled = true; };
+  }, [apiBase]);
+
+  const run = async (fn: () => Promise<Response>) => {
+    setBusy(true); setError(null); setResult(null);
+    try {
+      const res = await fn();
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.detail || `API error ${res.status}`);
+      setResult(body);
+    } catch (e: any) {
+      setError(e.message === "Failed to fetch"
+        ? `Could not reach the API at ${apiBase}. Is the backend running?` : e.message);
+    } finally { setBusy(false); }
+  };
+
+  const analyzeText = () => run(() =>
+    fetch(`${apiBase}/analyze`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, use_llm: useLlm }) }));
+
+  const analyzePdf = (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    run(() => fetch(`${apiBase}/analyze-pdf?use_llm=${useLlm}`, { method: "POST", body: form }));
+  };
+
+  const verdict = useMemo(() => {
+    if (!result) return null;
+    const elevated = Object.entries(result.risk_scores || {})
+      .filter(([, s]: any) => s >= 0.5).sort((a: any, b: any) => b[1] - a[1])
+      .map(([c]) => CATEGORIES.find((x) => x.id === c)?.name || c);
+    return elevated.length
+      ? `Elevated exposure in ${elevated.slice(0, 3).join(", ")}. ${result.flagged_paragraphs} paragraph(s) queued for review.`
+      : result.flagged_paragraphs
+        ? `No elevated categories — ${result.flagged_paragraphs} weak flag(s) worth a skim.`
+        : "No risk clauses detected in this contract.";
+  }, [result]);
+
+  return (
+    <Card>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <SectionTitle overline="Live analysis" title="Analyze a contract"
+          sub="Runs the real pipeline: the recall-first model scores every paragraph, weak flags go to the LLM for triage. Paste text or upload a PDF." />
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`h-2 w-2 rounded-full ${apiUp === null ? "bg-zinc-500 animate-pulse" : apiUp ? "bg-emerald-400" : "bg-rose-500"}`} />
+          <input value={apiBase} onChange={(e) => setApiBase(e.target.value)} spellCheck={false}
+            className="w-56 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[11px] text-zinc-300 transition focus:border-gold-500/50 focus:outline-none [html:not(.dark)_&]:bg-white [html:not(.dark)_&]:text-zinc-700"
+            aria-label="API base URL" />
+        </div>
+      </div>
+
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={7}
+        placeholder="Paste contract text here — or load the sample, or upload a PDF below…"
+        className="mt-2 w-full rounded-xl border border-white/10 bg-black/25 p-4 font-mono text-[12.5px] leading-relaxed text-zinc-300 placeholder-zinc-600 transition focus:border-gold-500/50 focus:outline-none focus:ring-2 focus:ring-gold-500/15 [html:not(.dark)_&]:bg-white [html:not(.dark)_&]:text-zinc-700" />
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button onClick={analyzeText} disabled={busy || !text.trim() || !apiUp}
+          className="rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 px-5 py-2.5 text-sm font-bold text-ink-950 shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+          {busy ? "Analyzing…" : "Analyze text"}
+        </button>
+        <button onClick={() => fileRef.current?.click()} disabled={busy || !apiUp}
+          className="rounded-xl border border-gold-500/40 px-5 py-2.5 text-sm font-semibold text-gold-300 transition hover:bg-gold-500/10 disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/60">
+          Upload PDF
+        </button>
+        <input ref={fileRef} type="file" accept=".pdf" className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) analyzePdf(f); e.target.value = ""; }} />
+        <button onClick={() => setText(SAMPLE_CONTRACT)} disabled={busy}
+          className="text-xs text-zinc-500 underline decoration-dotted underline-offset-4 transition hover:text-gold-300">
+          Load sample contract
+        </button>
+        <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-zinc-400">
+          <input type="checkbox" checked={useLlm} onChange={(e) => setUseLlm(e.target.checked)}
+            disabled={!llmReady} className="h-3.5 w-3.5 accent-[#d4952a]" />
+          LLM triage of weak flags {llmReady ? "" : "(no key on server)"}
+        </label>
+      </div>
+
+      {busy && (
+        <div className="mt-5 flex items-center gap-3 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4 text-sm text-zinc-400">
+          <svg className="h-4 w-4 animate-spin text-gold-400" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+          Screening every paragraph locally, escalating weak flags to the LLM…
+        </div>
+      )}
+      {error && (
+        <div className="mt-5 rounded-xl border border-rose-500/25 bg-rose-500/5 p-4 text-sm text-rose-300">{error}</div>
+      )}
+
+      {result && !busy && (
+        <div className="mt-6 space-y-5">
+          <div className="rounded-xl border border-gold-500/30 bg-gradient-to-r from-gold-500/10 to-transparent p-4 text-sm font-medium text-zinc-100 [html:not(.dark)_&]:text-zinc-800">
+            {verdict}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              ["Paragraphs", result.total_paragraphs],
+              ["Flagged", result.flagged_paragraphs],
+              ["LLM escalations", result.llm_stats?.escalated ?? 0],
+              ["Cleared by LLM", result.llm_stats?.cleared_by_llm ?? 0],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
+                <p className="text-xl font-bold text-zinc-100 [html:not(.dark)_&]:text-zinc-800">{value}</p>
+                <p className="text-[11px] text-zinc-500">{label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Risk exposure by category</p>
+            <div className="space-y-1.5">
+              {Object.entries(result.risk_scores || {}).sort((a: any, b: any) => b[1] - a[1]).map(([catId, score]: any) => {
+                const cat = CATEGORIES.find((c) => c.id === catId);
+                return (
+                  <div key={catId} className="flex items-center gap-3">
+                    <button onClick={() => onCategory(catId)}
+                      className="w-44 shrink-0 truncate text-left text-xs text-zinc-400 underline decoration-dotted decoration-transparent underline-offset-4 transition hover:text-gold-300 hover:decoration-zinc-600">
+                      {cat ? cat.name : catId}
+                    </button>
+                    <div className="h-5 flex-1 overflow-hidden rounded-md bg-white/[0.04]">
+                      <div className="flex h-full items-center justify-end rounded-md pr-2 font-mono text-[10px] text-ink-950 transition-all duration-700"
+                        style={{ width: `${Math.max(score * 100, score > 0 ? 8 : 0)}%`, background: score > 0 ? riskColor(score) : "transparent" }}>
+                        {score > 0 ? score.toFixed(2) : ""}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {(result.detections || []).length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                Findings ({result.detections.length}) — highest confidence first
+              </p>
+              <div className="space-y-3">
+                {result.detections.map((d: any, i: number) => (
+                  <FindingCard key={`${d.paragraph_id}-${d.risk_category}-${i}`} d={d} onCategory={onCategory} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.llm_stats?.llm_model && (
+            <p className="text-[11px] text-zinc-600">
+              LLM: {result.llm_stats.llm_model} · est. cost ${Number(result.llm_stats.estimated_cost_usd || 0).toFixed(4)}
+              {result.llm_stats.cache_hits ? ` · ${result.llm_stats.cache_hits} from cache` : ""}
+              {result.llm_stats.fallbacks ? ` · ${result.llm_stats.fallbacks} weak flag(s) kept unreviewed (budget)` : ""}
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ============================================================
    Shell: sidebar, header, layout
    ============================================================ */
 
 const NAV = [
   { id: "overview", label: "Overview", icon: "M3 12l9-9 9 9M5 10v10h5v-6h4v6h5V10" },
+  { id: "analyze", label: "Analyze Contract", icon: "M12 5v14m-7-7h14" },
   { id: "queue", label: "Review Queue", icon: "M4 6h16M4 12h16M4 18h10" },
   { id: "performance", label: "Model Performance", icon: "M4 19V5m0 14h16M8 15l3-4 3 2 4-6" },
   { id: "taxonomy", label: "Risk Taxonomy", icon: "M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zm0 0v18" },
@@ -550,8 +789,9 @@ function App() {
     document.body.style.color = dark ? "#d6d0c4" : "#3d382d";
   }, [dark]);
 
-  const refs = { overview: useRef<HTMLDivElement>(null), queue: useRef<HTMLDivElement>(null),
-    performance: useRef<HTMLDivElement>(null), taxonomy: useRef<HTMLDivElement>(null) };
+  const refs = { overview: useRef<HTMLDivElement>(null), analyze: useRef<HTMLDivElement>(null),
+    queue: useRef<HTMLDivElement>(null), performance: useRef<HTMLDivElement>(null),
+    taxonomy: useRef<HTMLDivElement>(null) };
   const goto = useCallback((id: string) => {
     setNav(id);
     refs[id as keyof typeof refs]?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -575,6 +815,11 @@ function App() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {KPIS.map((k) => <KpiCard key={k.label} k={k} />)}
             </div>
+          </section>
+
+          {/* Live analysis */}
+          <section ref={refs.analyze} className="scroll-mt-20">
+            <AnalyzeSection onCategory={(id) => setModalCategory(id)} />
           </section>
 
           {/* Taxonomy chips */}

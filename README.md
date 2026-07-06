@@ -6,15 +6,20 @@ A collaborative AI/data science project for automated legal contract risk analys
 
 ## Try It
 
-There are two front-ends — don't confuse them:
+Lexorion ships as a React website backed by a FastAPI inference service:
 
 | | What it is | Link |
 |---|---|---|
-| **Live app** | The working product: upload a contract (TXT/PDF), get live baseline scoring with LLM triage, evidence phrases, and a ranked review queue | _Deploy pending — see [Deployment](#deployment-streamlit-community-cloud) below, then put the share.streamlit.io URL here_ |
-| **UI concept demo** | A polished React/TypeScript presentation of the product vision with measured metrics and demo queue data ([docs/demo/index.html](docs/demo/index.html)) — no live inference | `https://<your-github-username>.github.io/Lexorion/demo/` after enabling GitHub Pages (Settings → Pages → deploy from `main`, `/docs` folder) |
+| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | `https://<your-github-username>.github.io/Lexorion/demo/` after enabling GitHub Pages (Settings → Pages → `main`, `/docs` folder) |
+| **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | Deploy the repo [Dockerfile](Dockerfile) to a free Hugging Face Space, then paste the Space URL into the API field on the website |
+| **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
-Running locally: `streamlit run src/dashboard/app.py` for the app, or open
-`docs/demo/index.html` in a browser for the concept demo.
+Run everything locally:
+
+```bash
+uvicorn src.api.main:app --port 8000        # backend
+open docs/demo/index.html                    # website (defaults to localhost:8000)
+```
 
 ## What This Does
 
@@ -76,10 +81,11 @@ Liquidated Damages
                                                      └──────────┬───────────┘
                               ┌───────────────────────────────┘
                               ▼
-                    ┌─────────────────┐     ┌─────────────────┐
-                    │  Risk Scorer    │────▶│  Dashboard UI   │
-                    │  (Aggregation)  │     │  (Streamlit)    │
-                    └─────────────────┘     └─────────────────┘
+                    ┌─────────────────┐     ┌──────────────────────┐
+                    │  Risk Scorer    │────▶│  FastAPI service      │
+                    │  (Aggregation)  │     │  ⇅ React web app      │
+                    └─────────────────┘     │  (+ Streamlit local)  │
+                                            └──────────────────────┘
 
 Planned: swap the baseline scorer for a fine-tuned DeBERTa once GPU training
 is available; the router design stays the same.
@@ -183,24 +189,31 @@ python -m src.models.baseline_detector
 streamlit run src/dashboard/app.py
 ```
 
-## Deployment (Streamlit Community Cloud)
+## Deployment (all free tier)
 
-The dashboard deploys on the free tier using the slim dependency set — the live
-inference path only needs scikit-learn plus an HTTP call to OpenRouter, so
-torch/transformers stay out of the cloud build.
+**1. Backend — Hugging Face Spaces (Docker):**
 
 1. Push to GitHub, including `checkpoints/baseline_tfidf_logreg.joblib`
-   (~12 MB, intentionally un-gitignored so the deployed app can score live).
-2. On [share.streamlit.io](https://share.streamlit.io), create an app pointing at
-   `src/dashboard/app.py`.
-3. In **Advanced settings**, set Python to **3.11**. Streamlit Cloud installs
-   the slim root `requirements.txt` automatically (the heavy training stack is
-   in `requirements-dev.txt` and stays out of the cloud build).
-4. In the **Secrets** panel, paste the contents of
-   `.streamlit/secrets.toml.example` with your real OpenRouter key.
+   (~12 MB, intentionally un-gitignored so the server can score live).
+2. Create a new Space at [huggingface.co/new-space](https://huggingface.co/new-space)
+   with the **Docker** SDK, and connect this repo (or push to the Space's git
+   remote). The root [Dockerfile](Dockerfile) serves the API on port 7860.
+3. In the Space settings → **Variables and secrets**, add
+   `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` (see `.streamlit/secrets.toml.example`
+   for values). Without a key the API still works baseline-only.
+4. Note your Space URL, e.g. `https://<user>-lexorion.hf.space` — check
+   `<url>/health` returns `{"status": "ok"}`.
 
-Without a key the app still works — it runs baseline-only analysis and the LLM
-toggle explains what is disabled.
+**2. Frontend — GitHub Pages:**
+
+1. Repo Settings → Pages → deploy from branch → `main`, `/docs` folder.
+2. Open `https://<your-github-username>.github.io/Lexorion/demo/` and paste
+   your Space URL into the API field (top-right of the Analyze panel — it's
+   remembered in the browser).
+
+**Optional — Streamlit UI on share.streamlit.io:** point an app at
+`src/dashboard/app.py`, Python 3.11, secrets from
+`.streamlit/secrets.toml.example`. Same pipeline, alternative front-end.
 
 ## Results
 
