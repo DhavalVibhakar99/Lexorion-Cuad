@@ -21,7 +21,7 @@ Lexorion ships as a React website backed by a FastAPI inference service:
 | | What it is | Link |
 |---|---|---|
 | **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | `https://<your-github-username>.github.io/Lexorion/demo/` after enabling GitHub Pages (Settings → Pages → `main`, `/docs` folder) |
-| **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | Deploy the repo [Dockerfile](Dockerfile) to a free Hugging Face Space, then set `PROD_API` in [docs/demo/index.html](docs/demo/index.html) to the Space URL |
+| **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | **Live:** [dhaval99-lexorion-cuad.hf.space](https://dhaval99-lexorion-cuad.hf.space) · [interactive docs](https://dhaval99-lexorion-cuad.hf.space/docs) · [Space](https://huggingface.co/spaces/dhaval99/lexorion_cuad) |
 | **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
 Run everything locally:
