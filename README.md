@@ -4,6 +4,18 @@ A collaborative AI/data science project for automated legal contract risk analys
 
 > Current status: the end-to-end product loop works — contract in (text or PDF), baseline scoring, LLM escalation of uncertain clauses via OpenRouter, and a deployable Streamlit dashboard. DeBERTa fine-tuning remains a planned milestone (requires GPU).
 
+## Try It
+
+There are two front-ends — don't confuse them:
+
+| | What it is | Link |
+|---|---|---|
+| **Live app** | The working product: upload a contract (TXT/PDF), get live baseline scoring with LLM triage, evidence phrases, and a ranked review queue | _Deploy pending — see [Deployment](#deployment-streamlit-community-cloud) below, then put the share.streamlit.io URL here_ |
+| **UI concept demo** | A polished React/TypeScript presentation of the product vision with measured metrics and demo queue data ([docs/demo/index.html](docs/demo/index.html)) — no live inference | `https://<your-github-username>.github.io/Lexorion/demo/` after enabling GitHub Pages (Settings → Pages → deploy from `main`, `/docs` folder) |
+
+Running locally: `streamlit run src/dashboard/app.py` for the app, or open
+`docs/demo/index.html` in a browser for the concept demo.
+
 ## What This Does
 
 Lexorion is designed to:
