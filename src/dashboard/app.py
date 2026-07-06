@@ -260,6 +260,58 @@ CATEGORY_STAKES = {
 }
 
 
+PLAIN_ENGLISH = {
+    "liability_risk": "If something goes wrong, this decides how much money you can actually recover — or be forced to pay. Caps often limit recovery to far less than your real loss.",
+    "ip_risk": "Who ends up owning the ideas, code, and inventions created under this contract — and who is allowed to keep using them.",
+    "termination_risk": "How easily either side can walk away from the deal, and what happens to your business when they do.",
+    "indemnification": "Who has to pay for lawsuits, damages, or losses when something connected to the deal goes wrong — you, them, or both.",
+    "exclusivity": "Promises that limit who else you can do business with — like not selling to competitors or not hiring the other side's people.",
+    "change_of_control": "What happens to the contract if either company gets bought or merged. Deals you rely on can change overnight when ownership changes.",
+    "revenue_risk": "Money you are committing to spend or share — minimum purchases, revenue splits, price locks, and fees that escalate automatically.",
+    "renewal_expiration": "When the contract ends, whether it quietly renews by itself, and how much notice you need to give to escape it.",
+}
+
+EXAMPLE_CLAUSES = {
+    "liability_risk": "In no event shall either party's aggregate liability exceed the fees paid in the twelve (12) months preceding the claim.",
+    "ip_risk": "All intellectual property developed under this Agreement shall be the sole and exclusive property of the Company.",
+    "termination_risk": "Either party may terminate this Agreement for any reason upon thirty (30) days' prior written notice.",
+    "indemnification": "Vendor shall indemnify, defend, and hold harmless Customer from any and all claims arising out of Vendor's performance.",
+    "exclusivity": "During the Term, Customer shall not engage any competing provider for substantially similar services.",
+    "change_of_control": "This Agreement may not be assigned without prior written consent, including by merger or change of control.",
+    "revenue_risk": "Customer shall purchase a minimum of $250,000 in services during the first contract year.",
+    "renewal_expiration": "This Agreement automatically renews for successive one-year terms unless either party gives notice ninety (90) days prior to expiration.",
+}
+
+
+def render_taxonomy_explorer():
+    """Clickable plain-English explainer for the 8 risk categories."""
+    st.markdown(
+        '<div class="lex-workspace-label">Risk Taxonomy — click any category for plain English</div>',
+        unsafe_allow_html=True,
+    )
+    info = category_info()
+    categories = list(info.keys())
+    for row_start in range(0, len(categories), 4):
+        cols = st.columns(4)
+        for col, key in zip(cols, categories[row_start : row_start + 4]):
+            v = info[key]
+            with col.popover(v["display"], use_container_width=True):
+                st.markdown(f"**In plain English:** {PLAIN_ENGLISH.get(key, '')}")
+                if v["description"]:
+                    st.caption(f"Covers: {v['description']}")
+                example = EXAMPLE_CLAUSES.get(key)
+                if example:
+                    st.markdown("**What it looks like in a contract:**")
+                    st.code(example, language=None)
+                stakes = CATEGORY_STAKES.get(key)
+                if stakes:
+                    st.markdown(f"**Real-world stakes:** {stakes}")
+                st.caption(
+                    f"Severity weight {v['severity']:.2f} — higher means a "
+                    "confirmed clause moves the contract risk score more."
+                )
+
+
 def category_info() -> dict:
     """Description + severity per category from the mapping config."""
     config = load_category_mapping() or {}
@@ -363,13 +415,26 @@ def render_analysis_results(profile: dict):
     render_verdict(profile)
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Paragraphs Analyzed", profile.get("total_paragraphs", 0))
-    col2.metric("Clauses Flagged", profile.get("flagged_paragraphs", 0))
+    col1.metric(
+        "Paragraphs Analyzed",
+        profile.get("total_paragraphs", 0),
+        help="How many text blocks the contract was split into. Every one is checked against all 8 risk categories.",
+    )
+    col2.metric(
+        "Clauses Flagged",
+        profile.get("flagged_paragraphs", 0),
+        help="Paragraphs containing at least one suspected risk clause — these make up the review queue below.",
+    )
     col3.metric(
         "Review Rate",
         f"{profile.get('flagged_paragraphs', 0) / max(profile.get('total_paragraphs', 1), 1):.1%}",
+        help="Share of the contract a human should actually read. The point of the pipeline is keeping this small without missing real risks.",
     )
-    col4.metric("Processing Time", f"{profile.get('processing_time_seconds', 0):.1f}s")
+    col4.metric(
+        "Processing Time",
+        f"{profile.get('processing_time_seconds', 0):.1f}s",
+        help="Local scoring is near-instant; LLM triage adds a few seconds per escalated clause.",
+    )
 
     render_pipeline_strip(profile)
 
@@ -543,6 +608,7 @@ if page == "Review Console":
         "Live baseline" if baseline_ready else "Demo environment",
     )
     render_signal_strip(baseline_ready, _llm_ready)
+    render_taxonomy_explorer()
 
     with st.expander("Analysis settings", expanded=False):
         use_llm = st.toggle(
@@ -704,22 +770,10 @@ if page == "Review Console":
             """,
             unsafe_allow_html=True,
         )
-        st.subheader("What Lexorion looks for")
-        info = category_info()
-        glossary = pd.DataFrame(
-            [
-                {
-                    "Risk Category": v["display"],
-                    "What it covers": v["description"],
-                    "Real-world stakes": CATEGORY_STAKES.get(k, ""),
-                }
-                for k, v in info.items()
-            ]
-        )
-        st.dataframe(glossary, width="stretch", hide_index=True)
         st.caption(
             "Pick a document source above to run a live analysis — the demo "
-            "contract takes about two seconds."
+            "contract takes about two seconds. Click any category in the Risk "
+            "Taxonomy strip to see what it means in plain English."
         )
 
 
