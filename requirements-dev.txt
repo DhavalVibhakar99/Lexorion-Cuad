@@ -9,6 +9,8 @@ transformers>=4.35.0
 datasets>=2.14.0
 accelerate>=0.24.0
 tokenizers>=0.14.0
+sentencepiece>=0.1.99
+protobuf>=4.0
 
 # NLP utilities
 spacy>=3.6.0

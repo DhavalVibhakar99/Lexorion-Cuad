@@ -73,7 +73,7 @@ Liquidated Damages
 | LLM classification | Complete | Budget-guarded OpenRouter classifier with caching, JSON validation, and guardrails; evaluated on all 8 categories. |
 | Hybrid routing | Complete | Baseline scores everything; near-threshold clauses escalate to the LLM, live in the dashboard. |
 | Deployment | Ready | Slim `requirements.txt` + secrets template + Streamlit Cloud instructions below. |
-| DeBERTa training | Planned | Transformer fine-tuning awaits GPU access; the router is designed to slot it in. |
+| DeBERTa training | Ready to run | One-click Colab notebook ([notebooks/02_deberta_colab.ipynb](notebooks/02_deberta_colab.ipynb)): single multi-label fine-tune, recall-first thresholds, drops straight into the comparison. |
 
 ## Architecture
 
