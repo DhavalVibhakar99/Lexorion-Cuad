@@ -1,3 +1,13 @@
+---
+title: Lexorion API
+emoji: ⚖️
+colorFrom: yellow
+colorTo: gray
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Lexorion: Contract Risk Intelligence System
 
 A collaborative AI/data science project for automated legal contract risk analysis. Lexorion uses the CUAD contract dataset to detect business-relevant legal risk clauses and turn long contract text into a structured risk profile.
