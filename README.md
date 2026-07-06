@@ -20,7 +20,7 @@ Lexorion ships as a React website backed by a FastAPI inference service:
 
 | | What it is | Link |
 |---|---|---|
-| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **[dhavalvibhakar99.github.io/Lexorion-Cuad/demo](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/)** (requires the repo to be public with Pages enabled: Settings → Pages → `main`, `/docs`) |
+| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **[dhavalvibhakar99.github.io/Lexorion-Cuad/demo](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/)** (requires the repo to be public with Pages enabled: Settings → Pages → `master`, `/docs`) |
 | **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | **Live:** [dhaval99-lexorion-cuad.hf.space](https://dhaval99-lexorion-cuad.hf.space) · [interactive docs](https://dhaval99-lexorion-cuad.hf.space/docs) · [Space](https://huggingface.co/spaces/dhaval99/lexorion_cuad) |
 | **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
@@ -220,7 +220,7 @@ streamlit run src/dashboard/app.py
    [docs/demo/index.html](docs/demo/index.html) to your Space URL and commit.
    (The API endpoint is deliberately not user-editable on the site; when the
    file is opened locally it talks to `localhost:8000` automatically.)
-2. Repo Settings → Pages → deploy from branch → `main`, `/docs` folder.
+2. Repo Settings → Pages → deploy from branch → `master`, `/docs` folder.
 3. Open `https://<your-github-username>.github.io/Lexorion/demo/`.
 
 **Optional — Streamlit UI on share.streamlit.io:** point an app at

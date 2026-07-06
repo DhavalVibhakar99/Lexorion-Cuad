@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dhaval-boiler-plate-code]
+    branches: [master, dhaval-boiler-plate-code]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   test:
