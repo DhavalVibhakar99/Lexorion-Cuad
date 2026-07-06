@@ -99,7 +99,7 @@ This takes 3-5 minutes (PyTorch is ~2GB). If you see any red errors, share them
 in our group chat before trying to fix them yourself.
 
 If you only want to run the dashboard, the slim runtime set is enough
-(it's also what Streamlit Cloud installs when deploying):
+(it's also what the deployed API installs):
 
 ```bash
 pip install -r requirements.txt
@@ -224,13 +224,18 @@ Guardrails:
 
 ---
 
-## Step 11: Launch the dashboard (optional, to see the UI)
+## Step 11: Run the product locally (API + website)
 
 ```bash
-streamlit run src/dashboard/app.py
+uvicorn src.api.main:app --port 8000        # the inference API
+open docs/demo/index.html                    # the React website (talks to localhost:8000)
 ```
 
-Opens in your browser at `http://localhost:8501`.
+Optional — the Streamlit dev UI (same pipeline, alternative front-end):
+
+```bash
+streamlit run src/dashboard/app.py           # http://localhost:8501
+```
 
 ---
 
@@ -246,14 +251,13 @@ Opens in your browser at `http://localhost:8501`.
 
 ---
 
-## Google Colab Setup (for DeBERTa training only)
+## Google Colab (for DeBERTa training only)
 
-Local machines don't have GPUs. We use Google Colab's free T4 GPU for training.
+Local machines don't have GPUs; DeBERTa trains on Colab's free T4. The
+one-click notebook is `notebooks/02_deberta_colab.ipynb` — open it via:
 
-1. Go to https://colab.research.google.com
-2. Upload the notebook or connect to GitHub
-3. Runtime → Change runtime type → T4 GPU
-4. Mount Google Drive or upload the processed parquet files
-5. Run training cells
+https://colab.research.google.com/github/DhavalVibhakar99/Lexorion-Cuad/blob/master/notebooks/02_deberta_colab.ipynb
 
-Detailed Colab notebook will be created when we reach Week 3.
+Set `Runtime → Change runtime type → T4 GPU`, then Run all. It clones the
+repo, rebuilds the data from the public CUAD source, trains, and downloads
+the two result files to drop into `data/processed/`.

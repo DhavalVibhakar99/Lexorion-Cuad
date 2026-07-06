@@ -20,7 +20,7 @@ Lexorion ships as a React website backed by a FastAPI inference service:
 
 | | What it is | Link |
 |---|---|---|
-| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **[dhavalvibhakar99.github.io/Lexorion-Cuad/demo](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/)** (requires the repo to be public with Pages enabled: Settings → Pages → `master`, `/docs`) |
+| **Website** | React/TypeScript SPA ([docs/demo/index.html](docs/demo/index.html)): paste a contract or upload a PDF, get live scoring with LLM triage, evidence phrases, and clickable plain-English risk categories | **Live:** [dhavalvibhakar99.github.io/Lexorion-Cuad/demo](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/) |
 | **API** | FastAPI service ([src/api/main.py](src/api/main.py)) wrapping the hybrid pipeline; holds the OpenRouter key server-side | **Live:** [dhaval99-lexorion-cuad.hf.space](https://dhaval99-lexorion-cuad.hf.space) · [interactive docs](https://dhaval99-lexorion-cuad.hf.space/docs) · [Space](https://huggingface.co/spaces/dhaval99/lexorion_cuad) |
 | **Local dev UI** | The original Streamlit dashboard — same pipeline, useful for local exploration | `streamlit run src/dashboard/app.py` |
 
@@ -66,13 +66,13 @@ Liquidated Damages
 | CUAD download/parsing | Complete | Converts CUAD from QA-style records into structured tables. |
 | Risk category mapping | Complete | Maps selected CUAD labels into 8 business-facing risk groups. |
 | Paragraph chunking | Complete | Splits contracts into paragraphs and creates paragraph-level labels. |
-| Tests | Passing | `22` pipeline/helper tests currently pass. |
+| Tests | Passing | 37 tests (data pipeline + model layer with mocked LLM), run in CI on every push. |
 | Streamlit dashboard | Complete | Text, paste, and PDF intake; live hybrid analysis with model badges, routing stats, and cost tracking. |
 | Baseline model | Complete | TF-IDF + logistic regression baseline trained across all 8 categories and saved for dashboard inference. |
 | Baseline error analysis | Complete | Generates false-positive/false-negative samples and a Markdown report. |
 | LLM classification | Complete | Budget-guarded OpenRouter classifier with caching, JSON validation, and guardrails; evaluated on all 8 categories. |
 | Hybrid routing | Complete | Baseline scores everything; near-threshold clauses escalate to the LLM, live in the dashboard. |
-| Deployment | Ready | Slim `requirements.txt` + secrets template + Streamlit Cloud instructions below. |
+| Deployment | **Live** | React site on GitHub Pages + FastAPI on Hugging Face Spaces — see [Try It](#try-it). |
 | DeBERTa training | Complete | Multi-label fine-tune on Colab T4 ([notebook](notebooks/02_deberta_colab.ipynb)); result: loses to TF-IDF at matched recall — documented as a negative finding. |
 
 ## Architecture
@@ -116,58 +116,61 @@ it lost to TF-IDF at matched recall (see Results). The lexical screen stays.
 
 ## Tech Stack
 
-- **Python 3.10+**
-- **PyTorch + HuggingFace Transformers** — DeBERTa fine-tuning
-- **Anthropic/OpenAI/OpenRouter API** — LLM reasoning layer
-- **Streamlit** — Dashboard UI
-- **Pandas + scikit-learn** — Data processing & evaluation
+- **Python 3.11** + **scikit-learn / pandas** — data pipeline, production screen, evaluation
+- **FastAPI** on Hugging Face Spaces (Docker) — inference API, key management, guardrails
+- **React 18 + TypeScript + Tailwind + Chart.js** — the website (single-file SPA on GitHub Pages)
+- **OpenRouter (free-tier LLM)** — triage of weak flags: structured JSON, budget-capped, cached
+- **PyTorch + HuggingFace Transformers** — the DeBERTa/MiniLM experiments (Colab)
+- **Streamlit** — optional local dev UI
 
 ## Project Structure
 
 ```
-contract-risk-intel/
-├── README.md
-├── requirements.txt               # Slim runtime set (dashboard + deploy)
+Lexorion-Cuad/
+├── README.md                      # You are here (doubles as HF Space config)
+├── Dockerfile                     # FastAPI image for Hugging Face Spaces
+├── requirements.txt               # Slim runtime set (API + dashboards)
 ├── requirements-dev.txt           # Full training/eval/dev stack
 ├── configs/
 │   ├── model_config.yaml          # Model hyperparameters
 │   └── category_mapping.yaml      # CUAD 41 → 8 risk categories
-├── data/
-│   ├── raw/                       # Original CUAD data (gitignored)
-│   ├── processed/                 # Cleaned, chunked, ready for training
-│   └── evaluation/                # Hold-out test sets, predictions
+├── checkpoints/
+│   └── baseline_tfidf_logreg.joblib   # Production screen artifact (LFS)
+├── data/                          # gitignored; rebuilt from public CUAD
 ├── src/
+│   ├── api/
+│   │   └── main.py                # FastAPI: /analyze, /analyze-pdf, /health
 │   ├── data_pipeline/
-│   │   ├── __init__.py
 │   │   ├── download_cuad.py       # Download & extract CUAD
-│   │   ├── parse_cuad.py          # Parse SQuAD JSON → clean format
-│   │   ├── chunk_contracts.py     # Intelligent paragraph chunking
+│   │   ├── parse_cuad.py          # Parse QA-format JSON → tables
+│   │   ├── chunk_contracts.py     # Paragraph chunking + contract-level splits
 │   │   └── category_mapper.py     # Map 41 labels → 8 risk categories
 │   ├── models/
-│   │   ├── __init__.py
-│   │   ├── clause_detector.py     # DeBERTa fine-tuning for clause detection
-│   │   ├── llm_classifier.py      # LLM-based clause analysis
-│   │   ├── hybrid_pipeline.py     # Combined detector + classifier
-│   │   └── risk_scorer.py         # Aggregate clause-level → contract-level risk
+│   │   ├── baseline_detector.py   # TF-IDF screen + recall-first thresholds
+│   │   ├── embed_detector.py      # MiniLM experiment (negative result)
+│   │   ├── clause_detector.py     # DeBERTa multi-label fine-tune (negative result)
+│   │   ├── llm_classifier.py      # Guarded, cached OpenRouter classifier
+│   │   ├── hybrid_pipeline.py     # Screen + LLM triage routing (production)
+│   │   └── risk_scorer.py         # Clause-level → contract-level aggregation
 │   ├── evaluation/
-│   │   ├── __init__.py
-│   │   ├── metrics.py             # Per-category P/R/F1, Jaccard, AUPR
-│   │   ├── error_analysis.py      # False negative deep-dive
-│   │   └── model_comparison.py    # Head-to-head: DeBERTa vs LLM vs Hybrid
+│   │   ├── metrics.py             # Per-category P/R/F1
+│   │   ├── error_analysis.py      # False negative/positive deep-dive
+│   │   ├── hybrid_eval.py         # End-to-end routing evaluation
+│   │   └── model_comparison.py    # The five-way bake-off table
 │   ├── dashboard/
-│   │   ├── __init__.py
-│   │   └── app.py                 # Streamlit dashboard
+│   │   └── app.py                 # Streamlit dev UI
 │   └── utils/
-│       ├── __init__.py
-│       └── text_processing.py     # Tokenization, cleaning helpers
+│       └── text_processing.py     # Cleaning helpers
 ├── notebooks/
-│   └── 01_eda_exploration.ipynb         # Data exploration
-├── tests/
-│   ├── test_data_pipeline.py
-│   └── test_models.py
-└── docs/
-    ├── TASK_BOARD.md              # Task tracking (mirror in Trello)
-    └── BLOG_DRAFT.md             # Medium post draft
+│   ├── 01_eda_exploration.ipynb   # Data exploration
+│   └── 02_deberta_colab.ipynb     # One-click GPU training on Colab
+├── tests/                         # 37 tests; LLM fully mocked
+├── docs/
+│   ├── demo/index.html            # The website (React SPA, GitHub Pages)
+│   ├── assets/benchmark.png       # Results chart
+│   ├── TASK_BOARD.md              # Project log: plan vs. shipped
+│   └── BLOG_DRAFT.md              # Write-up of the bake-off findings
+└── .github/workflows/ci.yml       # pytest + ruff on every push
 ```
 
 ## Quick Start
@@ -297,7 +300,7 @@ Baseline error analysis samples are available in:
 
 Live dashboard inference uses the local model artifact:
 
-- `checkpoints/baseline_tfidf_logreg.joblib` (generated locally, gitignored)
+- `checkpoints/baseline_tfidf_logreg.joblib` (committed via Git LFS so the deployed API can score live; regenerate with `python -m src.models.baseline_detector`)
 
 ## Why A Hybrid Approach?
 
