@@ -68,6 +68,29 @@ def _analyze(text: str, use_llm: bool) -> dict:
         )
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    from fastapi.responses import HTMLResponse
+
+    return HTMLResponse(
+        """<!DOCTYPE html>
+<html><head><title>Lexorion API</title><style>
+body{font-family:system-ui;background:#14120e;color:#e8e3d8;display:grid;place-items:center;min-height:95vh;margin:0}
+main{max-width:520px;padding:2rem;text-align:center}
+h1{color:#d4952a;font-size:1.6rem}p{color:#a89f92;line-height:1.6}
+a{color:#d4952a;text-decoration:none;border-bottom:1px dotted #d4952a;margin:0 .5rem}
+code{background:#1c1a15;border:1px solid #2c2920;border-radius:6px;padding:2px 8px;font-size:.85rem}
+</style></head><body><main>
+<h1>&#9878;&#65039; Lexorion API</h1>
+<p>Contract risk screening: a recall-first local model scores every paragraph
+across 8 business risk categories; weak flags are triaged by an LLM.</p>
+<p><code>POST /analyze</code> &nbsp; <code>POST /analyze-pdf</code> &nbsp; <code>GET /health</code></p>
+<p><a href="/docs">Interactive API docs</a> |
+<a href="https://github.com/sahilshinde-45/Lexorion">GitHub</a></p>
+</main></body></html>"""
+    )
+
+
 @app.get("/health")
 def health() -> dict:
     return {
