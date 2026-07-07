@@ -8,6 +8,9 @@
 > model, and it runs entirely on free-tier cloud.
 > [Try it live](https://dhavalvibhakar99.github.io/Lexorion-Cuad/demo/).
 
+**[SCREENSHOT 1 — Overview + Analyze workspace: KPI row, live status pill,
+sidebar with "DeBERTa: Tested · rejected"]**
+
 ## The problem
 
 In July 2024, one bad software update grounded airlines and hospitals
@@ -22,6 +25,13 @@ Nobody reads every clause of every contract. That's the problem: contract
 review is expensive expert time spent mostly on pattern recognition. We wanted
 to know how far you could push the pattern-recognition layer with ML —
 cheaply — while leaving judgment to humans.
+
+**[SCREENSHOT 3 — the Liability Risk category card: plain-English
+explanation, example clause, and the CrowdStrike stakes line]**
+
+The taxonomy the system screens for isn't abstract — click any category in
+the live app and it explains itself the same way we just explained the
+CrowdStrike clause above.
 
 ## The setup
 
@@ -58,6 +68,9 @@ models:
 limits), so their precision is not comparable to the full-split rows above —
 recall is. Full details and caveats in the
 [repo](https://github.com/DhavalVibhakar99/Lexorion-Cuad).*
+
+**[SCREENSHOT 2 — Findings after running the sample: risk bars, evidence
+chips like "liability, exceed, claim", the extracted clause text]**
 
 ## Negative result #1: frozen embeddings halve your precision
 
@@ -113,6 +126,9 @@ paragraph×category decisions** to the LLM. The other 95.6% cost nothing.
 Each model is only asked the question it's good at: the baseline decides
 what's clean, the LLM adjudicates flags. The LLM never gets the chance to
 miss things, so its weakness (recall) never matters.
+
+**[SCREENSHOT 4 — Model Performance page: per-category recall bars +
+the live review queue with model badges (Baseline / LLM verified)]**
 
 ## What we'd tell you to steal
 
